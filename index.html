@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StegoCrypt - PWA</title>
+    <meta name="theme-color" content="#131614">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root {
+            --md-primary: #8eba96;
+            --md-on-primary: #122818;
+            --md-primary-container: #233a29;
+            --md-on-primary-container: #c4ebd0;
+            --md-surface: #131614;
+            --md-surface-dim: #0e110f;
+            --md-surface-container: #1b1f1c;
+            --md-surface-container-high: #252a26;
+            --md-surface-container-highest: #303531;
+            --md-on-surface: #e1e3df;
+            --md-on-surface-variant: #bfc8be;
+            --md-outline: #3d453f;
+            --md-outline-variant: #2d332e;
+            --md-error: #ffb4ab;
+            --md-error-container: #93000a;
+            --md-on-error: #690005;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', 'Segoe UI', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--md-surface);
+            color: var(--md-on-surface);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .m3-card {
+            width: 100%;
+            max-width: 480px;
+            background-color: var(--md-surface-container);
+            border-radius: 28px;
+            padding: 24px;
+            border: 1px solid var(--md-outline-variant);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--md-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            letter-spacing: -0.02em;
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: var(--md-on-surface-variant);
+            margin-top: 6px;
+        }
+
+        .m3-segmented-button {
+            display: flex;
+            background-color: var(--md-surface-container-high);
+            padding: 4px;
+            border-radius: 100px;
+            margin-bottom: 24px;
+            border: 1px solid var(--md-outline-variant);
+        }
+
+        .m3-segment-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            color: var(--md-on-surface-variant);
+            font-size: 0.875rem;
+            font-weight: 600;
+            border-radius: 100px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        .m3-segment-btn.active {
+            background-color: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+        }
+
+        .m3-field {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .m3-field label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--md-primary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        textarea {
+            width: 100%;
+            background-color: var(--md-surface-dim);
+            border: 1.5px solid var(--md-outline);
+            border-radius: 12px;
+            padding: 14px 16px;
+            color: var(--md-on-surface);
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            border-color: var(--md-primary);
+            background-color: var(--md-surface-container-high);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
+            background: var(--md-surface-dim);
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--md-outline-variant);
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--md-on-surface);
+            font-weight: 500;
+        }
+
+        .radio-option input[type="radio"] {
+            accent-color: var(--md-primary);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .m3-dropzone {
+            border: 2px dashed var(--md-outline);
+            border-radius: 20px;
+            padding: 20px 16px;
+            text-align: center;
+            background-color: var(--md-surface-dim);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .m3-dropzone:hover, .m3-dropzone.dragover {
+            border-color: var(--md-primary);
+            background-color: var(--md-surface-container-high);
+        }
+
+        .m3-dropzone p {
+            font-size: 0.875rem;
+            color: var(--md-on-surface-variant);
+        }
+
+        .m3-dropzone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            max-height: 180px;
+            border-radius: 12px;
+            margin-top: 12px;
+            display: none;
+            object-fit: contain;
+        }
+
+        .m3-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 100px;
+            background-color: var(--md-primary);
+            color: var(--md-on-primary);
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        .m3-btn:hover {
+            box-shadow: 0 4px 12px rgba(142, 186, 150, 0.25);
+            filter: brightness(1.05);
+        }
+
+        .m3-btn:active {
+            transform: scale(0.98);
+        }
+
+        .m3-btn-tonal {
+            background-color: var(--md-surface-container-highest);
+            color: var(--md-on-surface);
+            border: 1px solid var(--md-outline-variant);
+            margin-top: 12px;
+        }
+
+        .capacity-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--md-on-surface-variant);
+            margin-top: 8px;
+        }
+
+        .m3-banner {
+            background-color: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 16px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 0.8rem;
+            color: var(--md-on-surface-variant);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            line-height: 1.4;
+        }
+
+        .m3-status {
+            margin-top: 20px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            font-size: 0.875rem;
+            display: none;
+            line-height: 1.4;
+        }
+
+        .m3-status.success {
+            background-color: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            border: 1px solid var(--md-primary);
+        }
+
+        .m3-status.error {
+            background-color: var(--md-error-container);
+            color: var(--md-error);
+            border: 1px solid var(--md-error);
+        }
+
+        footer {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--md-on-surface-variant);
+            line-height: 1.6;
+            max-width: 480px;
+        }
+
+        footer a {
+            color: var(--md-primary);
+            text-decoration: none;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+
+<main class="m3-card">
+    <header>
+        <h1>🌿 StegoCrypt</h1>
+        <p>Resim İçi Steganografi & Görünmez Metin Şifreleme</p>
+    </header>
+
+    <nav class="m3-segmented-button">
+        <button class="m3-segment-btn active" id="btn-tab-hide">İçerik Gizle</button>
+        <button class="m3-segment-btn" id="btn-tab-reveal">İçerik Çöz</button>
+    </nav>
+
+    <!-- 1. GİZLEME SEKMESİ -->
+    <section id="tab-hide" class="tab-content active">
+        <div class="m3-field">
+            <label>1. Gizleme Yöntemi Seçin</label>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" name="secret-type" value="text" checked id="type-text">
+                    🖼️ Görsele Metin Göm (LSB PNG)
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="secret-type" value="file" id="type-file">
+                    📁 Görsele Dosya Göm (PDF, ZIP, TXT)
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="secret-type" value="invisible" id="type-invisible">
+                    👻 Görünmez Metin (WhatsApp / Metin Dostu)
+                </label>
+            </div>
+        </div>
+
+        <!-- Taşıyıcı Görsel Seçimi -->
+        <div class="m3-field" id="container-image-input">
+            <label>Taşıyıcı Görsel</label>
+            <div class="m3-dropzone" id="dropzone-hide">
+                <p>📷 Görseli buraya sürükleyin veya seçin</p>
+                <input type="file" id="file-hide" accept="image/*">
+                <img id="preview-hide" class="preview-img" alt="Önizleme">
+            </div>
+            <div class="capacity-info">
+                <span id="capacity-text">Kapasite: Görsel bekleniyor</span>
+            </div>
+        </div>
+
+        <!-- Kılıf Metni Alanı (Görünmez Metin Modu İçin) -->
+        <div class="m3-field" id="container-cover-input" style="display: none;">
+            <label>Kılıf Mesajınız (Ekranda Görünecek Masum Metin)</label>
+            <input type="text" id="text-cover" placeholder="Örn: Selam kanka, yarın kaçta buluşuyoruz?" value="Selam, nasılsın?">
+        </div>
+
+        <!-- Metin Giriş Alanı -->
+        <div class="m3-field" id="container-text-input">
+            <label>Gizli Mesajınız</label>
+            <textarea id="text-hide" placeholder="Resmin veya metnin içine gömmek istediğiniz gizli mesaj..."></textarea>
+        </div>
+
+        <!-- Dosya Seçim Alanı -->
+        <div class="m3-field" id="container-file-input" style="display: none;">
+            <label>Gömmek İstediğiniz Dosya</label>
+            <div class="m3-dropzone">
+                <p id="label-secret-file">📁 Bir dosya seçin (PDF, TXT, ZIP...)</p>
+                <input type="file" id="file-secret-input">
+            </div>
+        </div>
+
+        <div class="m3-field">
+            <label>Şifreleme Parolası</label>
+            <input type="password" id="pass-hide" placeholder="İçeriği çözmek için gerekecek parola">
+        </div>
+
+        <button class="m3-btn" id="btn-encrypt">🔐 Şifrele ve Gizle</button>
+        <button class="m3-btn m3-btn-tonal" id="btn-share" style="display: none;">📲 Görseli Paylaş / İndir</button>
+        
+        <!-- Görünmez Metin Çıktı Alanı -->
+        <div class="m3-field" id="container-invisible-output" style="display: none; margin-top: 20px;">
+            <label>Şifrelenmiş Görünmez Metin</label>
+            <textarea id="text-invisible-output" readonly></textarea>
+            <button class="m3-btn m3-btn-tonal" id="btn-copy-invisible" style="margin-top: 10px;">📋 Görünmez Metni Kopyala</button>
+        </div>
+    </section>
+
+    <!-- 2. ÇÖZME SEKMESİ -->
+    <section id="tab-reveal" class="tab-content">
+        <div class="m3-banner">
+            <span style="font-size: 1.2rem;">💡</span>
+            <span>Görsel şifreleri çözerken dosyanın <b>PNG</b> olduğundan; görünmez metinlerde ise metnin tamamının kopyalandığından emin olun.</span>
+        </div>
+
+        <div class="m3-field">
+            <label>1. Çözme Yöntemi Seçin</label>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" name="reveal-type" value="image" checked id="reveal-type-image">
+                    🖼️ Şifreli PNG Görseli Çöz
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="reveal-type" value="text" id="reveal-type-text">
+                    👻 Görünmez / Yapıştırılan Metni Çöz
+                </label>
+            </div>
+        </div>
+
+        <!-- Görsel Yükleme Alanı -->
+        <div class="m3-field" id="container-reveal-image">
+            <label>Şifreli PNG Görseli</label>
+            <div class="m3-dropzone" id="dropzone-reveal">
+                <p>🔍 İçinde gizli veri olan PNG görselini seçin</p>
+                <input type="file" id="file-reveal" accept="image/png,image/*">
+                <img id="preview-reveal" class="preview-img" alt="Önizleme">
+            </div>
+        </div>
+
+        <!-- Metin Yapıştırma Alanı -->
+        <div class="m3-field" id="container-reveal-text" style="display: none;">
+            <label>Şifreli / Görünmez Metni Buraya Yapıştırın</label>
+            <textarea id="text-reveal-input" placeholder="WhatsApp veya mesajlaşma uygulamasından kopyaladığınız metni buraya yapıştırın..."></textarea>
+        </div>
+
+        <div class="m3-field">
+            <label>2. Parola</label>
+            <input type="password" id="pass-reveal" placeholder="Görsel veya metin kilitlenirken kullanılan parola">
+        </div>
+
+        <button class="m3-btn" id="btn-decrypt">🔓 İçeriği Çöz</button>
+
+        <!-- Çözülen Çıktı -->
+        <div class="m3-field" style="margin-top: 20px;">
+            <textarea id="text-reveal" readonly placeholder="Çözülen metin burada belirecek..." style="display: none;"></textarea>
+            
+            <button class="m3-btn" id="btn-download-file" style="display: none;">💾 Çözülen Dosyayı İndir</button>
+            <button class="m3-btn m3-btn-tonal" id="btn-copy" style="display: none; margin-top: 10px;">📋 Panoya Kopyala (30s Otomatik Silinir)</button>
+        </div>
+    </section>
+
+    <div id="status-msg" class="m3-status"></div>
+</main>
+
+<!-- Eğitim ve Lisans Dipnotu -->
+<footer>
+    <p>⚠️ Bu uygulama sadece <b>eğitim, araştırma ve eğlence</b> amaçlı geliştirilmiştir.</p>
+    <p>Açık kaynak kodlu olup <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT Lisansı</a> ile sunulmuştur.</p>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+</body>
+</html>
