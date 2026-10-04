@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self';">
+    <meta name="referrer" content="no-referrer">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StegoCrypt - PWA</title>
     <meta name="theme-color" content="#131614">
+    <meta name="description" content="İstemci taraflı LSB görsel steganografisi ve görünmez metin şifreleme uygulaması">
     <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         :root {
             --md-primary: #8eba96;
@@ -314,6 +317,7 @@
     <nav class="m3-segmented-button">
         <button class="m3-segment-btn active" id="btn-tab-hide">İçerik Gizle</button>
         <button class="m3-segment-btn" id="btn-tab-reveal">İçerik Çöz</button>
+        <button class="m3-segment-btn" id="btn-tab-inspect">🔬 Steganaliz</button>
     </nav>
 
     <!-- 1. GİZLEME SEKMESİ -->
@@ -340,12 +344,68 @@
         <div class="m3-field" id="container-image-input">
             <label>Taşıyıcı Görsel</label>
             <div class="m3-dropzone" id="dropzone-hide">
-                <p>📷 Görseli buraya sürükleyin veya seçin</p>
-                <input type="file" id="file-hide" accept="image/*">
+                <p>📷 Görseli buraya sürükleyin veya seçin (PNG, JPG, HEIC, WEBP)</p>
+                <input type="file" id="file-hide" accept="image/*,.heic,.heif" aria-label="Taşıyıcı görsel seçin">
                 <img id="preview-hide" class="preview-img" alt="Önizleme">
             </div>
             <div class="capacity-info">
                 <span id="capacity-text">Kapasite: Görsel bekleniyor</span>
+            </div>
+        </div>
+
+        <!-- Gizleme Yoğunluğu & Kapasite Modu -->
+        <div class="m3-field" id="container-density-input">
+            <label>Kapasite & Güvenlik Seviyesi</label>
+            <div class="radio-group" style="flex-direction: row; gap: 16px;">
+                <label class="radio-option">
+                    <input type="radio" name="density-mode" value="1" checked id="density-1lsb">
+                    🟢 1-LSB (Yüksek Gizlilik)
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="density-mode" value="2" id="density-2lsb">
+                    ⚡ 2-LSB (2x Yüksek Kapasite)
+                </label>
+            </div>
+        </div>
+
+        <!-- Piksel Dağıtım Yöntemi -->
+        <div class="m3-field" id="container-scatter-input">
+            <label>Piksel Dağıtım Yöntemi</label>
+            <div class="radio-group" style="flex-direction: row; gap: 16px;">
+                <label class="radio-option">
+                    <input type="radio" name="scatter-mode" value="scatter" checked id="scatter-mode-prng">
+                    🎲 Dağınık (PRNG Homojen & Sıfır İmza)
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="scatter-mode" value="sequential" id="scatter-mode-seq">
+                    📏 Sıralı (Klasik)
+                </label>
+            </div>
+        </div>
+
+        <!-- İnkâr Edilebilir Şifreleme (Tuzak Katman Seçeneği) -->
+        <div class="m3-field" id="container-deniable-toggle">
+            <label class="radio-option" style="cursor: pointer; user-select: none;">
+                <input type="checkbox" id="check-deniable" style="width: 18px; height: 18px; accent-color: var(--md-primary);">
+                🕵️ İnkâr Edilebilir Şifreleme (Tuzak Katman Ekle)
+            </label>
+            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 4px; margin-left: 26px;">
+                Baskı altında kalındığında verilmek üzere masum bir kılıf parola ve mesajı ekler.
+            </p>
+        </div>
+
+        <!-- Tuzak Katman Alanı (Varsayılan Gizli) -->
+        <div id="container-deniable-fields" style="display: none; background: var(--md-surface-dim); padding: 14px 16px; border-radius: 16px; margin-bottom: 20px; border: 1px dashed var(--md-outline);">
+            <div style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary); margin-bottom: 12px;">
+                🎭 1. Katman: Tuzak / Kılıf İçerik (Baskı Altında Verilecek)
+            </div>
+            <div class="m3-field">
+                <label>Tuzak Mesaj</label>
+                <textarea id="text-decoy" placeholder="Örn: Selamlar, yarınki buluşmayı erteleyelim mi?" style="min-height: 60px;"></textarea>
+            </div>
+            <div class="m3-field" style="margin-bottom: 0;">
+                <label>Tuzak Parola</label>
+                <input type="password" id="pass-decoy" autocomplete="off" placeholder="Zorlama altında verilecek parola">
             </div>
         </div>
 
@@ -364,15 +424,15 @@
         <!-- Dosya Seçim Alanı -->
         <div class="m3-field" id="container-file-input" style="display: none;">
             <label>Gömmek İstediğiniz Dosya</label>
-            <div class="m3-dropzone">
+            <div class="m3-dropzone" id="dropzone-secret-file">
                 <p id="label-secret-file">📁 Bir dosya seçin (PDF, TXT, ZIP...)</p>
-                <input type="file" id="file-secret-input">
+                <input type="file" id="file-secret-input" aria-label="Gömmek istediğiniz gizli dosyayı seçin">
             </div>
         </div>
 
         <div class="m3-field">
-            <label>Şifreleme Parolası</label>
-            <input type="password" id="pass-hide" placeholder="İçeriği çözmek için gerekecek parola">
+            <label id="label-pass-hide">Şifreleme Parolası</label>
+            <input type="password" id="pass-hide" autocomplete="off" placeholder="İçeriği çözmek için gerekecek parola">
         </div>
 
         <button class="m3-btn" id="btn-encrypt">🔐 Şifrele ve Gizle</button>
@@ -383,6 +443,21 @@
             <label>Şifrelenmiş Görünmez Metin</label>
             <textarea id="text-invisible-output" readonly></textarea>
             <button class="m3-btn m3-btn-tonal" id="btn-copy-invisible" style="margin-top: 10px;">📋 Görünmez Metni Kopyala</button>
+        </div>
+
+        <!-- QR Kod Butonu ve Önizleme Alanı -->
+        <button class="m3-btn m3-btn-tonal" id="btn-show-qr" style="display: none; margin-top: 10px;">📱 QR Kod Üret & Göster</button>
+        <div id="container-qr-preview" style="display: none; text-align: center; margin-top: 16px; background: var(--md-surface-dim); padding: 16px; border-radius: 16px; border: 1px solid var(--md-outline);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="font-size: 0.9rem; color: var(--md-primary); margin: 0;">📱 Paylaşılabilir QR Kod</h4>
+                <button type="button" id="btn-close-qr" style="background: none; border: none; color: var(--md-on-surface-variant); cursor: pointer; font-size: 1.1rem; padding: 4px 8px;" aria-label="QR önizlemeyi kapat">✕</button>
+            </div>
+            <div style="background: white; padding: 12px; display: inline-block; border-radius: 12px; margin-bottom: 12px;">
+                <canvas id="canvas-qr" role="img" aria-label="Oluşturulan QR Kod" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></canvas>
+            </div>
+            <div>
+                <button class="m3-btn" id="btn-download-qr" style="padding: 10px 20px; font-size: 0.85rem; width: auto; display: inline-flex;">💾 QR Kodu İndir (PNG)</button>
+            </div>
         </div>
     </section>
 
@@ -411,8 +486,8 @@
         <div class="m3-field" id="container-reveal-image">
             <label>Şifreli PNG Görseli</label>
             <div class="m3-dropzone" id="dropzone-reveal">
-                <p>🔍 İçinde gizli veri olan PNG görselini seçin</p>
-                <input type="file" id="file-reveal" accept="image/png,image/*">
+                <p>🔍 İçinde gizli veri olan PNG/HEIC görselini seçin</p>
+                <input type="file" id="file-reveal" accept="image/png,image/*,.heic,.heif" aria-label="Şifreli görsel seçin">
                 <img id="preview-reveal" class="preview-img" alt="Önizleme">
             </div>
         </div>
@@ -421,11 +496,19 @@
         <div class="m3-field" id="container-reveal-text" style="display: none;">
             <label>Şifreli / Görünmez Metni Buraya Yapıştırın</label>
             <textarea id="text-reveal-input" placeholder="WhatsApp veya mesajlaşma uygulamasından kopyaladığınız metni buraya yapıştırın..."></textarea>
+            
+            <div style="margin-top: 12px; padding: 12px 14px; background: var(--md-surface-dim); border-radius: 12px; border: 1px dashed var(--md-outline);">
+                <span style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--md-primary); margin-bottom: 8px;">📷 VEYA QR KOD GÖRSELİNDEN TARA</span>
+                <div class="m3-dropzone" id="dropzone-qr-scan" style="padding: 12px;">
+                    <p id="label-qr-scan">📷 QR görselini buraya bırakın veya seçin</p>
+                    <input type="file" id="file-qr-scan" accept="image/*,.heic,.heif" aria-label="QR kod görseli seçin">
+                </div>
+            </div>
         </div>
 
         <div class="m3-field">
             <label>2. Parola</label>
-            <input type="password" id="pass-reveal" placeholder="Görsel veya metin kilitlenirken kullanılan parola">
+            <input type="password" id="pass-reveal" autocomplete="off" placeholder="Görsel veya metin kilitlenirken kullanılan parola">
         </div>
 
         <button class="m3-btn" id="btn-decrypt">🔓 İçeriği Çöz</button>
@@ -436,6 +519,68 @@
             
             <button class="m3-btn" id="btn-download-file" style="display: none;">💾 Çözülen Dosyayı İndir</button>
             <button class="m3-btn m3-btn-tonal" id="btn-copy" style="display: none; margin-top: 10px;">📋 Panoya Kopyala (30s Otomatik Silinir)</button>
+            <button class="m3-btn m3-btn-tonal" id="btn-clear-output" style="display: none; margin-top: 10px;">🗑️ Çıktıyı Temizle</button>
+        </div>
+    </section>
+
+    <!-- 3. STEGANALİZ SEKMESİ -->
+    <section id="tab-inspect" class="tab-content">
+        <div class="m3-banner">
+            <span style="font-size: 1.2rem;">🔬</span>
+            <span>Görselin en önemsiz bitlerini (LSB) röntgen haritası olarak inceleyin ve <b>χ² (Chi-Square)</b> istatistiksel testiyle steganografi varlığını tespit edin.</span>
+        </div>
+
+        <div class="m3-field">
+            <label>Analiz Edilecek Görsel</label>
+            <div class="m3-dropzone" id="dropzone-inspect">
+                <p>🔍 Görseli buraya sürükleyin veya seçin (PNG / JPG / HEIC)</p>
+                <input type="file" id="file-inspect" accept="image/*,.heic,.heif" aria-label="Steganaliz edilecek görseli seçin">
+            </div>
+        </div>
+
+        <div id="inspect-controls" style="display: none;">
+            <div class="m3-field">
+                <label>Röntgen Filtresi & Kanal</label>
+                <div class="radio-group" style="flex-direction: row; flex-wrap: wrap; gap: 8px;">
+                    <label class="radio-option">
+                        <input type="radio" name="inspect-channel" value="all" checked id="inspect-chan-all">
+                        🌈 RGB
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="inspect-channel" value="red" id="inspect-chan-red">
+                        🔴 Kırmızı
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="inspect-channel" value="green" id="inspect-chan-green">
+                        🟢 Yeşil
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="inspect-channel" value="blue" id="inspect-chan-blue">
+                        🔵 Mavi
+                    </label>
+                </div>
+            </div>
+
+            <!-- LSB Röntgen Önizleme Canvas -->
+            <div class="m3-field">
+                <label>LSB Bit Düzlemi Röntgeni (Bit 0)</label>
+                <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
+                    <canvas id="canvas-inspect" role="img" aria-label="LSB Bit Düzlemi Röntgeni" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
+                </div>
+            </div>
+
+            <!-- Analiz Rapor Kartı -->
+            <div id="inspect-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">χ² (Chi-Square) Steganaliz Testi</span>
+                    <span id="inspect-prob-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
+                </div>
+                <h4 id="inspect-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Görsel Analiz Ediliyor...</h4>
+                <p id="inspect-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
+                <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
+                    <span id="inspect-stats">χ²: 0.00 | Serbestlik Derecesi: 0</span>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -449,10 +594,5 @@
 </footer>
 
 <script type="module" src="js/app.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
-  }
-</script>
 </body>
 </html>

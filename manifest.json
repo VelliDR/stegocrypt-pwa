@@ -1,15 +1,25 @@
 {
   "name": "StegoCrypt PWA",
   "short_name": "StegoCrypt",
+  "description": "İstemci taraflı LSB görsel steganografisi ve görünmez metin şifreleme uygulaması",
+  "id": "./",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#131614",
   "theme_color": "#131614",
   "icons": [
     {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
