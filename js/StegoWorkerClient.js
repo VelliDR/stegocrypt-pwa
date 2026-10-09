@@ -8,6 +8,7 @@ import { CryptoEngine } from './CryptoEngine.js';
 import { StegoEngine } from './StegoEngine.js';
 import { SteganalysisEngine } from './SteganalysisEngine.js';
 import { PngCodec } from './png/PngCodec.js';
+import { AdaptiveEngine } from './AdaptiveEngine.js';
 
 class StegoWorkerClientManager {
     constructor() {
@@ -104,6 +105,7 @@ class StegoWorkerClientManager {
         rawDecoy = null,
         passDecoy = null,
         method = 'matching',
+        distribution = 'adaptive',
         onProgress = null
     }) {
         // Transferable için kopya al (orijinal tampon korunabilsin)
@@ -122,7 +124,8 @@ class StegoWorkerClientManager {
                 isDeniable,
                 rawDecoy: rawDecoy ? Array.from(rawDecoy) : null,
                 passDecoy,
-                method
+                method,
+                distribution
             },
             transferList,
             onProgress
@@ -146,17 +149,25 @@ class StegoWorkerClientManager {
             const masterDecoy = await CryptoEngine.deriveMasterKeyV3(passDecoy, sharedSalt, 600000);
             const subkeysDecoy = await CryptoEngine.deriveSubkeysV3(masterDecoy, 'v3/even');
 
-            if (onProgress) onProgress(40, `2/4: Tuzak katman şifreleniyor (${method} ile even kanallarına)...`);
+            if (onProgress) onProgress(40, `2/4: Tuzak katman şifreleniyor (${method}, ${distribution})...`);
             const encDecoy = await CryptoEngine.encryptV3(new Uint8Array(rawDecoy), subkeysDecoy.metaKey, subkeysDecoy.bodyKey, lsbMode);
-            StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
+            if (distribution === 'adaptive') {
+                AdaptiveEngine.embedAdaptive(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
+            } else {
+                StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
+            }
 
             if (onProgress) onProgress(60, "3/4: Gerçek katman anahtarı türetiliyor (600.000 PBKDF2)...");
             const masterReal = await CryptoEngine.deriveMasterKeyV3(pass, sharedSalt, 600000);
             const subkeysReal = await CryptoEngine.deriveSubkeysV3(masterReal, 'v3/odd');
 
-            if (onProgress) onProgress(80, `4/4: Gerçek katman şifreleniyor (${method} ile odd kanallarına)...`);
+            if (onProgress) onProgress(80, `4/4: Gerçek katman şifreleniyor (${method}, ${distribution})...`);
             const encReal = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeysReal.metaKey, subkeysReal.bodyKey, lsbMode);
-            StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
+            if (distribution === 'adaptive') {
+                AdaptiveEngine.embedAdaptive(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
+            } else {
+                StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
+            }
         } else {
             if (onProgress) onProgress(25, "1/3: Master anahtar türetiliyor (600.000 PBKDF2)...");
             const masterKey = await CryptoEngine.deriveMasterKeyV3(pass, sharedSalt, 600000);
@@ -165,8 +176,12 @@ class StegoWorkerClientManager {
             if (onProgress) onProgress(50, "2/3: Veri şifreleniyor (AES-256-GCM)...");
             const enc = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeys.metaKey, subkeys.bodyKey, lsbMode);
 
-            if (onProgress) onProgress(75, `3/3: Piksellere dağıtılıyor (Format v3, ${method})...`);
-            StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
+            if (onProgress) onProgress(75, `3/3: Piksellere dağıtılıyor (Format v3, ${method}, ${distribution})...`);
+            if (distribution === 'adaptive') {
+                AdaptiveEngine.embedAdaptive(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
+            } else {
+                StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
+            }
         }
 
         if (onProgress) onProgress(90, "PNG kodlanıyor (saf deterministik codec)...");
@@ -329,6 +344,28 @@ class StegoWorkerClientManager {
         }
 
         return await PngCodec.decode(fileBuffer);
+    }
+
+    /**
+     * Dinamik Stego Risk İndeksi Hesaplama
+     */
+    async calculateStegoRisk({ pixelBuffer, width, height, payloadBytes, lsbMode = 1 }) {
+        const workerBuffer = pixelBuffer.slice(0);
+        const transferList = [workerBuffer];
+
+        const workerPromise = this._send(
+            'CALCULATE_RISK',
+            { pixelBuffer: workerBuffer, width, height, payloadBytes, lsbMode },
+            transferList
+        );
+
+        if (workerPromise) {
+            const res = await workerPromise;
+            return res.risk;
+        }
+
+        const data = new Uint8ClampedArray(pixelBuffer);
+        return AdaptiveEngine.calculateStegoRisk(payloadBytes, width, height, data, lsbMode);
     }
 }
 

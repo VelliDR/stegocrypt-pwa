@@ -7,6 +7,7 @@
  */
 import { ScatterEngine } from './ScatterEngine.js';
 import { CryptoEngine } from './CryptoEngine.js';
+import { AdaptiveEngine } from './AdaptiveEngine.js';
 
 /**
  * LSB Matching 1-bit (±1):
@@ -53,6 +54,8 @@ export function matchLsb2(val, targetBits, randChoice = Math.random() < 0.5) {
 export const StegoEngine = {
     matchLsb1,
     matchLsb2,
+    embedAdaptive: (...args) => AdaptiveEngine.embedAdaptive(...args),
+    extractAdaptive: (...args) => AdaptiveEngine.extractAdaptive(...args),
 
     /**
      * Dağınık Mod (PRNG): Başlığı (1-LSB) ve gövdeyi (1 veya 2-LSB) homojen şekilde saçar.
@@ -455,6 +458,15 @@ export const StegoEngine = {
                 const masterKey = await CryptoEngine.deriveMasterKeyV3(password, salt, 600000);
 
                 const v3Partitions = ['all', 'even', 'odd'];
+                // 1.a Format v3 İçerik Duyarlı Mod (Adaptive Texture)
+                for (const part of v3Partitions) {
+                    try {
+                        return await AdaptiveEngine.extractAdaptive(imageData, masterKey, part);
+                    } catch {
+                        // Bu adaptive katmanı değilse devam et
+                    }
+                }
+                // 1.b Format v3 Homojen Dağınık Mod (Uniform Scattered)
                 for (const part of v3Partitions) {
                     try {
                         return await this.extractV3(imageData, masterKey, part);

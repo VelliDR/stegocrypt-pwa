@@ -46,9 +46,15 @@ const density1lsbRadio = document.getElementById('density-1lsb');
 const density2lsbRadio = document.getElementById('density-2lsb');
 const containerDensityInput = document.getElementById('container-density-input');
 
+const scatterModeAdaptiveRadio = document.getElementById('scatter-mode-adaptive');
 const scatterModePrngRadio = document.getElementById('scatter-mode-prng');
 const scatterModeSeqRadio = document.getElementById('scatter-mode-seq');
 const containerScatterInput = document.getElementById('container-scatter-input');
+
+const containerRiskIndicator = document.getElementById('container-risk-indicator');
+const riskBadge = document.getElementById('risk-badge');
+const riskProgressBar = document.getElementById('risk-progress-bar');
+const riskMessage = document.getElementById('risk-message');
 
 const methodMatchingRadio = document.getElementById('method-matching');
 const methodReplacementRadio = document.getElementById('method-replacement');
@@ -202,12 +208,67 @@ function isDeniableMode() {
     return checkDeniable && checkDeniable.checked && !typeInvisibleRadio.checked;
 }
 
+function getDistributionMode() {
+    if (scatterModeSeqRadio && scatterModeSeqRadio.checked) return 'sequential';
+    if (scatterModePrngRadio && scatterModePrngRadio.checked) return 'uniform';
+    return 'adaptive';
+}
+
+let riskCalcTimer = null;
+async function updateStegoRiskUI() {
+    if (!containerRiskIndicator) return;
+    if (!currentHideCanvasData || typeInvisibleRadio.checked) {
+        containerRiskIndicator.style.display = 'none';
+        return;
+    }
+
+    let payloadBytes = 0;
+    if (typeFileRadio.checked) {
+        if (selectedSecretFile) payloadBytes = selectedSecretFile.size;
+    } else {
+        const textVal = inputHideText ? inputHideText.value.trim() : "";
+        if (textVal) payloadBytes = new TextEncoder().encode(textVal).length;
+    }
+
+    if (payloadBytes <= 0) {
+        containerRiskIndicator.style.display = 'none';
+        return;
+    }
+
+    clearTimeout(riskCalcTimer);
+    riskCalcTimer = setTimeout(async () => {
+        try {
+            const mode = getLsbMode();
+            const risk = await StegoWorkerClient.calculateStegoRisk({
+                pixelBuffer: currentHideCanvasData.imageData.data.buffer,
+                width: currentHideCanvasData.imageData.width,
+                height: currentHideCanvasData.imageData.height,
+                payloadBytes,
+                lsbMode: mode
+            });
+
+            containerRiskIndicator.style.display = 'block';
+            riskBadge.innerText = `${risk.label} (%${risk.usagePercent})`;
+            riskBadge.style.color = (risk.level === 'high') ? 'var(--md-error)' : (risk.level === 'medium') ? '#ffd180' : 'var(--md-on-primary-container)';
+            riskBadge.style.backgroundColor = (risk.level === 'high') ? 'var(--md-error-container)' : (risk.level === 'medium') ? '#4e342e' : 'var(--md-primary-container)';
+
+            riskProgressBar.style.width = `${Math.min(100, risk.usagePercent)}%`;
+            riskProgressBar.style.backgroundColor = (risk.level === 'high') ? 'var(--md-error)' : (risk.level === 'medium') ? '#f59e0b' : 'var(--md-primary)';
+
+            riskMessage.innerText = risk.message;
+        } catch (e) {
+            console.warn("Stego risk hesabı hatası:", e);
+        }
+    }, 120);
+}
+
 function updateCapacityUI() {
     const capEl = document.getElementById('capacity-text');
     if (!capEl) return;
 
     if (!currentHideCanvasData) {
         capEl.innerText = "Kapasite: Görsel bekleniyor";
+        if (containerRiskIndicator) containerRiskIndicator.style.display = 'none';
         return;
     }
 
@@ -223,6 +284,8 @@ function updateCapacityUI() {
     } else {
         capEl.innerHTML = `Ham Kapasite (${mode}-LSB): <b>~${displaySize}</b> <span style="opacity:0.85;">(Sıkıştırma ile ~${estimatedCompressible} alabilir)</span>`;
     }
+
+    updateStegoRiskUI();
 }
 
 // ---------- Buton Durum Yönetimi ----------
@@ -261,6 +324,10 @@ typeInvisibleRadio.addEventListener('change', updateHideModeUI);
 
 if (density1lsbRadio) density1lsbRadio.addEventListener('change', updateCapacityUI);
 if (density2lsbRadio) density2lsbRadio.addEventListener('change', updateCapacityUI);
+if (scatterModeAdaptiveRadio) scatterModeAdaptiveRadio.addEventListener('change', updateStegoRiskUI);
+if (scatterModePrngRadio) scatterModePrngRadio.addEventListener('change', updateStegoRiskUI);
+if (scatterModeSeqRadio) scatterModeSeqRadio.addEventListener('change', updateStegoRiskUI);
+if (inputHideText) inputHideText.addEventListener('input', updateStegoRiskUI);
 
 function updateHideModeUI() {
     if (typeTextRadio.checked) {
@@ -335,6 +402,7 @@ function handleSecretFileSelect(file) {
             hideStatus();
         }
     }
+    updateStegoRiskUI();
 }
 
 fileSecretInput.addEventListener('change', (e) => {
@@ -414,6 +482,7 @@ btnEncrypt.addEventListener('click', async () => {
     const useScatter = !isInvisibleMode && isScatteredMode();
     const deniableActive = isDeniableMode();
     const embedMethod = getEmbedMethod();
+    const distribution = getDistributionMode();
     let rawBufferToEncrypt = null;
 
     try {
@@ -498,6 +567,7 @@ btnEncrypt.addEventListener('click', async () => {
                 pass,
                 lsbMode,
                 method: embedMethod,
+                distribution,
                 isDeniable: true,
                 rawDecoy,
                 passDecoy,
@@ -510,14 +580,15 @@ btnEncrypt.addEventListener('click', async () => {
             currentHideCanvasData.imageData = updatedData;
 
             const sizeKB = Math.floor(generatedBlob.size / 1024);
-            showStatus(`✅ İŞLEM BAŞARILI! İnkâr edilebilir çift katmanlı görsel hazır (${sizeKB} KB, Tuzak & Gerçek Katman, Format v3).`);
+            const distLabel = distribution === 'adaptive' ? 'Doku Kafesi' : 'Dağınık PRNG';
+            showStatus(`✅ İŞLEM BAŞARILI! İnkâr edilebilir çift katmanlı görsel hazır (${sizeKB} KB, ${distLabel}, Format v3).`);
             btnShare.style.display = 'flex';
 
             passDecoyInput.value = '';
             textDecoyInput.value = '';
 
         } else if (useScatter) {
-            // Dağınık PRNG Tek Katman Modu (Format v3, 600.000 PBKDF2)
+            // Tek Katman Modu (Format v3, 600.000 PBKDF2)
             if (!currentHideCanvasData) throw new Error("Lütfen taşıyıcı görsel seçin.");
 
             showStatus("Format v3 şifreleniyor (600.000 PBKDF2, AES-256-GCM)...");
@@ -529,6 +600,7 @@ btnEncrypt.addEventListener('click', async () => {
                 pass,
                 lsbMode,
                 method: embedMethod,
+                distribution,
                 isDeniable: false,
                 onProgress: (percent, text) => showStatus(text)
             });
@@ -539,7 +611,8 @@ btnEncrypt.addEventListener('click', async () => {
             currentHideCanvasData.imageData = updatedData;
 
             const sizeKB = Math.floor(generatedBlob.size / 1024);
-            showStatus(`✅ İŞLEM BAŞARILI! Şifreli görsel hazır (${sizeKB} KB, Dağınık ${lsbMode}-LSB, Format v3).`);
+            const distLabel = distribution === 'adaptive' ? 'İçerik Duyarlı Doku' : 'Dağınık PRNG';
+            showStatus(`✅ İŞLEM BAŞARILI! Şifreli görsel hazır (${sizeKB} KB, ${distLabel} ${lsbMode}-LSB, Format v3).`);
             btnShare.style.display = 'flex';
 
         } else {

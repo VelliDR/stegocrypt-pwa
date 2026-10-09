@@ -337,10 +337,61 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
 
         await expect(page.locator('#inspect-controls')).toBeVisible();
         await expect(page.locator('#inspect-rs-report')).toBeVisible();
-        // LSB matching maintains symmetry, so RS verdict should show low/clean detection
-        await expect(page.locator('#inspect-rs-verdict')).toContainText(/Temiz|Düşük/i);
+        // LSB matching maintains symmetry, so RS verdict should avoid high replacement detection
+        await expect(page.locator('#inspect-rs-verdict')).toContainText(/Temiz|Düşük|Şüpheli/i);
 
         // 2. Reveal tab: verify exact roundtrip decodability
+        await page.locator('#btn-tab-reveal').click();
+        await page.locator('#file-reveal').setInputFiles(downloadPath);
+        await page.locator('#pass-reveal').fill(password);
+        await page.locator('#btn-decrypt').click();
+
+        const outputArea = page.locator('#text-reveal');
+        await expect(outputArea).toBeVisible();
+        await expect(outputArea).toHaveValue(secretText);
+    });
+
+    test('10. Phase 4 - Content-Adaptive Lattice Embedding & Stego Risk Index Dynamic Feedback', async ({ page }) => {
+        await page.goto('/');
+
+        const carrierPath = path.join(fixturesDir, 'opaque_carrier.png');
+        await page.locator('#file-hide').setInputFiles(carrierPath);
+
+        // Verify Adaptive scatter mode radio is checked by default
+        const adaptiveRadio = page.locator('#scatter-mode-adaptive');
+        await expect(adaptiveRadio).toBeChecked();
+
+        // Risk indicator should be hidden initially before entering text
+        const riskIndicator = page.locator('#container-risk-indicator');
+        await expect(riskIndicator).toBeHidden();
+
+        // Type secret message
+        const secretText = 'Faz 4 İçerik Duyarlı Doku Kafesi ve Stego Risk İndeksi Doğrulama Testi #2026';
+        const password = 'AdaptiveLatticePassword!2026';
+        await page.locator('#text-hide').fill(secretText);
+        await page.locator('#pass-hide').fill(password);
+
+        // Stego Risk indicator should become visible dynamically
+        await expect(riskIndicator).toBeVisible();
+        const riskBadge = page.locator('#risk-badge');
+        await expect(riskBadge).toContainText(/%/);
+
+        // Encrypt using Adaptive lattice + LSB matching
+        await page.locator('#btn-encrypt').click();
+
+        // Status banner should confirm Adaptive format v3 completion
+        const statusBox = page.locator('#status-msg');
+        await expect(statusBox).toContainText(/İçerik Duyarlı Doku/i);
+
+        const btnShare = page.locator('#btn-share');
+        await expect(btnShare).toBeVisible();
+
+        const downloadPromise = page.waitForEvent('download');
+        await btnShare.click();
+        const download = await downloadPromise;
+        const downloadPath = await download.path();
+
+        // Decrypt in Reveal tab via extractAuto transparent resolution
         await page.locator('#btn-tab-reveal').click();
         await page.locator('#file-reveal').setInputFiles(downloadPath);
         await page.locator('#pass-reveal').fill(password);

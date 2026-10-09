@@ -359,6 +359,19 @@
             <div class="capacity-info">
                 <span id="capacity-text">Kapasite: Görsel bekleniyor</span>
             </div>
+
+            <!-- Dinamik Stego Risk İndeksi Kartı -->
+            <div id="container-risk-indicator" style="display: none; background: var(--md-surface-dim); border-radius: 14px; padding: 12px 14px; border: 1px solid var(--md-outline-variant); margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--md-primary);">Stego Risk İndeksi</span>
+                    <span id="risk-badge" style="font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 100px; background: var(--md-primary-container); color: var(--md-on-primary-container);">Düşük Risk (%0)</span>
+                </div>
+                <div style="height: 6px; width: 100%; background: var(--md-surface-container-highest); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                    <div id="risk-progress-bar" style="height: 100%; width: 0%; background: var(--md-primary); transition: width 0.3s ease, background-color 0.3s ease;"></div>
+                </div>
+                <p id="risk-message" style="font-size: 0.73rem; color: var(--md-on-surface-variant); margin: 0; line-height: 1.35;"></p>
+            </div>
+
             <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 6px; line-height: 1.4;">
                 💡 <b>İletim Kuralı:</b> WhatsApp/Telegram üzerinden gönderirken mutlaka <b>"Belge / Dosya (Kayıpsız)"</b> olarak aktarın. Kayıplı fotoğraf sıkıştırması LSB verisini bozar.
             </p>
@@ -382,16 +395,23 @@
         <!-- Piksel Dağıtım Yöntemi -->
         <div class="m3-field" id="container-scatter-input">
             <label>Piksel Dağıtım Yöntemi</label>
-            <div class="radio-group" style="flex-direction: row; gap: 16px;">
+            <div class="radio-group" style="flex-direction: column; gap: 8px;">
                 <label class="radio-option">
-                    <input type="radio" name="scatter-mode" value="scatter" checked id="scatter-mode-prng">
-                    🎲 Dağınık (PRNG Homojen & Sıfır İmza)
+                    <input type="radio" name="scatter-mode" value="adaptive" checked id="scatter-mode-adaptive">
+                    🛡️ İçerik Duyarlı (Kenar / Doku Tabanlı Dama Tahtası Kafes) [Önerilen / Tespit Dirençli]
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="scatter-mode" value="scatter" id="scatter-mode-prng">
+                    🎲 Homojen Dağınık (PRNG Sıfır İmza / Tam Kapasite)
                 </label>
                 <label class="radio-option">
                     <input type="radio" name="scatter-mode" value="sequential" id="scatter-mode-seq">
-                    📏 Sıralı (Klasik)
+                    📏 Sıralı (Klasik / Legacy)
                 </label>
             </div>
+            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: -4px; line-height: 1.4;">
+                <b>İçerik Duyarlı Dağıtım:</b> Düz alanları (gökyüzü, homojen duvarlar) atlar; veriyi dama tahtası kafesinde çapa pikselleriyle korunan yüksek varyanslı kenarlara yerleştirir.
+            </p>
         </div>
 
         <!-- Bit Değiştirme Yöntemi (LSB Matching vs LSB Replacement) -->

@@ -94,6 +94,29 @@ export const ScatterEngine = {
     },
 
     /**
+     * Dağıtılmış adım numarasından bölüm içi kanal numarasını döndürür.
+     * @param {number} stepIndex
+     * @param {number} totalUsableChannels
+     * @param {number} c0
+     * @param {number} step
+     * @param {'all'|'even'|'odd'} [partition='all']
+     * @returns {number}
+     */
+    getPartitionChannel(stepIndex, totalUsableChannels, c0, step, partition = 'all') {
+        let nPartition = totalUsableChannels;
+        if (partition === 'even') {
+            nPartition = Math.floor((totalUsableChannels + 1) / 2);
+        } else if (partition === 'odd') {
+            nPartition = Math.floor(totalUsableChannels / 2);
+        }
+
+        const pIdx = (c0 + stepIndex * step) % nPartition;
+        if (partition === 'even') return pIdx * 2;
+        if (partition === 'odd') return pIdx * 2 + 1;
+        return pIdx;
+    },
+
+    /**
      * Dağıtılmış adım numarasından doğrudan ImageData.data raw indeksini döndürür.
      * @param {number} stepIndex
      * @param {number} totalUsableChannels
@@ -103,22 +126,7 @@ export const ScatterEngine = {
      * @returns {number}
      */
     getPartitionRawIndex(stepIndex, totalUsableChannels, c0, step, partition = 'all') {
-        let nPartition = totalUsableChannels;
-        if (partition === 'even') {
-            nPartition = Math.floor((totalUsableChannels + 1) / 2);
-        } else if (partition === 'odd') {
-            nPartition = Math.floor(totalUsableChannels / 2);
-        }
-
-        const pIdx = (c0 + stepIndex * step) % nPartition;
-        let usableChannel = pIdx;
-
-        if (partition === 'even') {
-            usableChannel = pIdx * 2;
-        } else if (partition === 'odd') {
-            usableChannel = pIdx * 2 + 1;
-        }
-
+        const usableChannel = this.getPartitionChannel(stepIndex, totalUsableChannels, c0, step, partition);
         const pixelIndex = Math.floor(usableChannel / 3);
         const colorOffset = usableChannel % 3;
         return pixelIndex * 4 + colorOffset;

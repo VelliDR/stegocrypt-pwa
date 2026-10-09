@@ -72,4 +72,32 @@ Her ne kadar LSB Matching ($\pm 1$) $\chi^2$ ve Fridrich RS testlerini tamamen e
 * **Derin Öğrenme Sınıflandırıcıları (CNN):** Evrişimli sinir ağları, piksellerin yüksek frekanslı gürültü artıklarını (noise residuals) inceleyerek LSB Matching izlerini saptayabilir.
 
 ### Faz 4 Çözümü: İçerik Duyarlı (Content-Adaptive) Dağıtım
-Bu yüksek seviyeli saldırılara karşı en etkili savunma, düz ve homojen bölgelere (gökyüzü, boş duvarlar) asla veri gömmemek; veriyi yalnızca üst-bit maskeli Sobel/Laplacian kenar analiziyle seçilen **yüksek varyanslı ve dokulu alanlara** yaymaktır (Faz 4 hedefi).
+Bu yüksek seviyeli saldırılara karşı en etkili savunma, düz ve homojen bölgelere (gökyüzü, boş duvarlar) asla veri gömmemek; veriyi yalnızca üst-bit maskeli Laplacian kenar analiziyle seçilen **yüksek varyanslı ve dokulu alanlara** yaymaktır.
+
+---
+
+## 5. İçerik Duyarlı (Content-Adaptive) Dağıtım ve Stego Risk İndeksi
+
+Faz 4 ile entegre edilen Dama Tahtası (Checkerboard) Kafes Doku Dağıtım Motoru (`AdaptiveEngine.js`), taşıyıcının düz ve homojen alanlarını (gökyüzü, tekdüze duvarlar) analiz dışı bırakarak yükü yalnızca yüksek frekanslı kenar ve dokulara gömer.
+
+### 5.1 Homojen PRNG vs. İçerik Duyarlı Kafes Dağıtımı
+
+Aşağıdaki kıyaslama, 1080p fotoğraflarda (örneğin %40 gökyüzü, %60 dokulu manzara) gömme yapıldığında bölgesel ısı haritası ve SRM/SPAM dedektörleri karşısındaki davranış farkını ortaya koyar:
+
+| Parametre | Homojen Dağınık PRNG (Uniform) | İçerik Duyarlı Kafes (Adaptive Texture) | Kazanç / Fark |
+| :--- | :---: | :---: | :---: |
+| **Düz Alanlara Gömme** | Evet (Tüm yüzeye rastgele dağılır) | **Hayır (Düz alanlar %100 bakirdir)** | Gökyüzü ve homojen alanlarda $0$ anomali |
+| **Bölgesel Isı Haritası (Heatmap)** | Düz alanlarda hafif gürültü benekleri | **Tamamen temiz (Doku içinde kamufle)** | Görsel inceleme röntgenine tam direnç |
+| **Çapa-Taşıyıcı Ayrımı** | Yok (Tüm pikseller değiştirilebilir) | **$x+y \pmod 2 = 0$ çapa pikselleri okunur** | Alıcı-verici %100 deterministik senkronizasyon |
+| **Bitstream Eşleme** | LSB Matching ($\pm 1$) | **LSB Matching ($\pm 1$)** | $\chi^2$ PoVs asimetrisi çöker |
+| **Gömme Kapasitesi** | $\%100$ Ham Kapasite | **$\sim \%50$ (Yalnızca dokulu pikseller)** | Güvenlik / Kapasite ödünleşimi |
+
+### 5.2 Dinamik Stego Risk İndeksi
+
+StegoCrypt v3, statik bpp eşikleri ($0.05$ veya $0.1$ bpp) yerine, görselin doku karmaşıklığına dayalı dinamik bir Stego Risk İndeksi sunar:
+
+$$\text{Risk Kullanım Oranı} = \frac{\text{Gömülecek Bayt Boyutu}}{\text{Yüksek Dokulu Güvenli Piksel Sayısı} \times \frac{3 \text{ kanal}}{8 \text{ bit/b}}}$$
+
+* **Düşük Risk ($\le \%20$):** Veri tamamen yüksek varyanslı doku ve kenar bölgelerine sığar. İstatistiksel tespit riski minimum seviyededir.
+* **Orta Risk ($\%20 - \%60$):** Veri yüksek ve orta dokulu alanlara yayılır. Doğal doku karmaşıklığı steganaliz filtrelerini zorlaştırır.
+* **Yüksek Tespit Riski ($> \%60$):** Gömülecek veri görselin dokulu alanlarını aşıp pürüzsüz/düz bölgelere taşma riski taşır. Arayüz kullanıcıyı uyararak taşıyıcı görseli büyütmesini veya metni kısaltmasını önerir.

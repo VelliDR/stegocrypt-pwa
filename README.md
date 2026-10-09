@@ -7,7 +7,7 @@
 ### İstemci Taraflı İstatistiksel Dirençli Steganografi, Kriptografi & Adli Bilişim Platformu
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests: Passing](https://img.shields.io/badge/Tests-37%20Unit%20%7C%2010%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
+[![Tests: Passing](https://img.shields.io/badge/Tests-42%20Unit%20%7C%2011%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
 [![PWA Ready](https://img.shields.io/badge/PWA-100%25%20Offline-brightgreen.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Security: AES-256-GCM](https://img.shields.io/badge/Security-AES--256--GCM-success.svg)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
 [![KDF: PBKDF2-SHA256](https://img.shields.io/badge/KDF-PBKDF2--100k%2F600k-orange.svg)](https://en.wikipedia.org/wiki/PBKDF2)
@@ -60,8 +60,10 @@ flowchart LR
 * **Sıfır-Kopyalama (Transferable Objects):** Görsel piksel tamponları (`ArrayBuffer`), bellek kopyalama maliyeti olmaksızın ($O(0)$ transfer) ana iş parçacığı ile Worker arasında aktarılır.
 * **Saf JavaScript PNG Codec (`PngCodec`):** HTML5 `<canvas>` elemanının premultiplied alpha, sRGB renk uzayı yuvarlamaları veya tarayıcı farbling (parmak izi bozma) etkilerini baypas etmek için RFC 1950/1951 saf JavaScript PNG kodlayıcı ve çözücü geliştirilmiştir. Dışa aktarılan stego PNG dosyaları bit-exact kesinliktedir.
 
-### 3. İstatiksel İnceleme Direnci, LSB Matching ($\pm 1$) & Dağıtım
+### 3. İstatiksel İnceleme Direnci, LSB Matching ($\pm 1$) & İçerik Duyarlı Dağıtım
 * **LSB Matching ($\pm 1$ Embedding):** Klasik LSB yerine koyma (replacement) yönteminde pikseller asimetrik değişerek Değer Çiftleri (PoVs) dengesini bozar ve $\chi^2$ / RS analizine yakalanır. StegoCrypt v3'te pikselin en alt biti hedef bite eşit değilse değer simetrik olarak rastgele $\pm 1$ kaydırılır (0 ve 255 sınır korumalı). Böylece PoVs asimetrisi ve $R_M < R_{-M}$ kayması tamamen nötralize edilir.
+* **Dama Tahtası (Checkerboard) Kafes Doku Dağıtımı (Content-Adaptive LSB):** Veriyi homojen pürüzsüz alanlara (gökyüzü, boş zemin) gömmeyi engeller. 2D Laplacian gradyanı ile hesaplanan en yüksek varyanslı piksellere veriyi odaklar. Çapa pikseller ($(x+y) \pmod 2 = 0$) ve `& 0xFE` üst-bit maskelemesi sayesinde alıcı-verici arasında 100% deterministik değişmezlik garantilenir.
+* **Dinamik Stego Risk İndeksi:** Statik bpp yerine görselin dokulu alan kapasitesine göre "Düşük Risk", "Orta Risk", "Yüksek Tespit Riski" dinamik geri bildirimi verir.
 * **PRNG Afin Saçılım:** Veri piksellerin başından itibaren sıralı gömülmez; HKDF tohumundan türetilen aralarında asal adımlarla ($O(1)$ bellek tüketimi) görselin tüm RGB kanallarına homojen dağıtılır.
 * **1-LSB & 2-LSB Seçimi:** Yüksek istatistiksel direnç için 1-LSB; yüksek taşıma kapasitesi için 2-LSB modu (en yakın komşuluk $\pm 2$ eşlemesi ile).
 * **Canvas Farbling Öz-Testi:** Açılışta test deseni çizilerek Brave Shields, Firefox RFP veya gizlilik eklentilerinin canvas verilerine gürültü ekleyip eklemediği denetlenir.
@@ -117,8 +119,8 @@ npm run test:e2e
 ```
 
 **Mevcut Test Durumu:**
-- **37 / 37** Birim Testi Başarılı (`node:test`, 680 ms)
-- **10 / 10** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact ve LSB Matching & RS analizi)
+- **42 / 42** Birim Testi Başarılı (`node:test`, 1050 ms)
+- **11 / 11** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact, LSB Matching & RS analizi, İçerik Duyarlı Doku Kafesi & Stego Risk İndeksi)
 
 ---
 

@@ -81,7 +81,40 @@ flowchart TD
 
 ---
 
-## 4. Referans Test Vektörleri
+## 4. Format v3: İçerik Duyarlı Dağıtım Modu (Faz 4 Spesifikasyonu)
+
+Format v3, homojen PRNG dağıtımının yanı sıra **Dama Tahtası (Checkerboard) Çapa-Taşıyıcı Kafes Mimarisi** üzerinde çalışan içerik duyarlı (content-adaptive) gömme modunu destekler. Bu mod, düz/pürüzsüz alanlara (gökyüzü, homojen duvarlar) veri gömülmesini engeller ve veriyi yalnızca yüksek varyanslı doku/kenar bölgelerine yoğunlaştırır.
+
+### 4.1 Dama Tahtası Kafes ve Çapa-Taşıyıcı Ayrımı
+
+Alıcı ve verici arasında sıfır-iletişimli deterministik senkronizasyon (sorting invariance) sağlamak amacıyla pikseller iki ayrık gruba ayrılır:
+1. **Çapa Pikseller (Anchor Pixels):** $(x + y) \pmod 2 = 0$. Bu pikseller kesinlikle salt okunurdur ve yük verisiyle değiştirilmez. Üst-bit maskelemesi (`& 0xFE`) ile okunarak 100% bit-exact değişmezlik sağlanır.
+2. **Taşıyıcı Pikseller (Payload Pixels):** $(x + y) \pmod 2 = 1$. Yalnızca bu pikseller doku analiziyle sıralanır ve şifreli veriyi taşır.
+
+### 4.2 2D Laplacian Doku Skorlama ve Kararlı Sıralama
+
+Her iç taşıyıcı piksel için 4 ortogonal çapa komşusu (Kuzey, Güney, Batı, Doğu) üzerinden gradyan hesaplanır:
+$$\text{Skor}(x, y) = \sum_{c \in \{R, G, B\}} \left( |(N_c \ \& \ \text{0xFE}) - (S_c \ \& \ \text{0xFE})| + |(E_c \ \& \ \text{0xFE}) - (W_c \ \& \ \text{0xFE})| \right)$$
+
+Pikseller doku skorlarına göre azalan sırada kararlı (stable) sıralanır; eşitlik durumunda piksel indeksi ikincil anahtar (tie-breaker) olarak kullanılır.
+
+### 4.3 Başlık ve Gövde Bölgesi Bölümlendirmesi
+
+```mermaid
+flowchart TD
+    A["Sıralı Taşıyıcı Piksel Havuzu (Doku Skoruna Göre Azalan)"] --> B["Başlık Bölgesi (Header Zone: İlk 256 Piksel)"]
+    A --> C["Gövde Bölgesi (Body Zone: Sonraki P_needed Piksel)"]
+    B --> B1["48 Bayt Format v3 Başlığı (1-LSB, scatterBits ile Dağıtılmış)"]
+    C --> C1["Şifreli Gövde (lsbMode, scatterBits ile Dağıtılmış)"]
+```
+
+1. **Başlık Bölgesi (Header Zone):** En yüksek dokulu ilk 256 piksel ($256 \times 3 = 768$ kanal) başlık için ayrılır. Alıcı taraf yük boyutunu henüz bilmediğinden, daima ilk 256 pikseli okuyarak 48 baytlık başlığı çözer.
+2. **Gövde Bölgesi (Body Zone):** Başlıktan çözülen `cipherLen` bayt miktarına göre gereken $P_{\text{needed}}$ piksel, sıralı havuzun 256. indeksinden itibaren tahsis edilir.
+3. Alıcı ve verici aynı $P_{\text{needed}}$ piksel kümesini ve aynı afin permütasyon indislerini üreterek şifreyi çözer.
+
+---
+
+## 5. Referans Test Vektörleri
 
 Aşağıdaki test vektörü, bağımsız kütüphanelerin uyumluluğunu test etmek için kullanılabilir:
 

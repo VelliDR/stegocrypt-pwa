@@ -10,6 +10,7 @@ import { StegoEngine } from '../js/StegoEngine.js';
 import { CompressionEngine } from '../js/CompressionEngine.js';
 import { SteganalysisEngine } from '../js/SteganalysisEngine.js';
 import { PngCodec } from '../js/png/PngCodec.js';
+import { AdaptiveEngine } from '../js/AdaptiveEngine.js';
 
 function sendProgress(id, percent, text) {
     self.postMessage({ type: 'PROGRESS', id, percent, text });
@@ -20,9 +21,10 @@ self.onmessage = async (e) => {
 
     try {
         if (action === 'ENCRYPT_V3') {
-            // data: { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy, method }
+            // data: { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy, method, distribution }
             const { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy } = data;
             const method = data.method || 'matching';
+            const distribution = data.distribution || 'adaptive';
             const imageData = {
                 width,
                 height,
@@ -37,19 +39,27 @@ self.onmessage = async (e) => {
                 const masterDecoy = await CryptoEngine.deriveMasterKeyV3(passDecoy, sharedSalt, 600000);
                 const subkeysDecoy = await CryptoEngine.deriveSubkeysV3(masterDecoy, 'v3/even');
 
-                sendProgress(id, 30, `2/4: Tuzak katman şifreleniyor (${method} ile even kanallarına)...`);
+                sendProgress(id, 30, `2/4: Tuzak katman şifreleniyor (${method}, ${distribution})...`);
                 const encDecoy = await CryptoEngine.encryptV3(new Uint8Array(rawDecoy), subkeysDecoy.metaKey, subkeysDecoy.bodyKey, lsbMode);
-                StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
+                if (distribution === 'adaptive') {
+                    AdaptiveEngine.embedAdaptive(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
+                } else {
+                    StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
+                }
 
                 sendProgress(id, 50, "3/4: Gerçek katman anahtarı türetiliyor (600.000 KDF)...");
                 const masterReal = await CryptoEngine.deriveMasterKeyV3(pass, sharedSalt, 600000);
                 const subkeysReal = await CryptoEngine.deriveSubkeysV3(masterReal, 'v3/odd');
 
-                sendProgress(id, 75, `4/4: Gerçek katman şifreleniyor (${method} ile odd kanallarına)...`);
+                sendProgress(id, 75, `4/4: Gerçek katman şifreleniyor (${method}, ${distribution})...`);
                 const encReal = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeysReal.metaKey, subkeysReal.bodyKey, lsbMode);
-                StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
+                if (distribution === 'adaptive') {
+                    AdaptiveEngine.embedAdaptive(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
+                } else {
+                    StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
+                }
             } else {
-                // Tekil Dağınık Mod (v3/all)
+                // Tekil Mod (v3/all)
                 sendProgress(id, 20, "1/3: Master anahtar türetiliyor (600.000 PBKDF2)...");
                 const masterKey = await CryptoEngine.deriveMasterKeyV3(pass, sharedSalt, 600000);
                 const subkeys = await CryptoEngine.deriveSubkeysV3(masterKey, 'v3/all');
@@ -57,8 +67,12 @@ self.onmessage = async (e) => {
                 sendProgress(id, 50, "2/3: Veri şifreleniyor (AES-256-GCM)...");
                 const enc = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeys.metaKey, subkeys.bodyKey, lsbMode);
 
-                sendProgress(id, 75, `3/3: Piksellere dağıtılıyor (Format v3, ${method})...`);
-                StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
+                sendProgress(id, 75, `3/3: Piksellere dağıtılıyor (Format v3, ${method}, ${distribution})...`);
+                if (distribution === 'adaptive') {
+                    AdaptiveEngine.embedAdaptive(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
+                } else {
+                    StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
+                }
             }
 
             sendProgress(id, 90, "PNG kodlanıyor (saf deterministik codec)...");
@@ -219,6 +233,29 @@ self.onmessage = async (e) => {
                     }
                 },
                 [decoded.data.buffer]
+            );
+
+        } else if (action === 'CALCULATE_RISK') {
+            // data: { pixelBuffer, width, height, payloadBytes, lsbMode }
+            const { pixelBuffer, width, height, payloadBytes, lsbMode } = data;
+            const risk = AdaptiveEngine.calculateStegoRisk(
+                payloadBytes,
+                width,
+                height,
+                new Uint8ClampedArray(pixelBuffer),
+                lsbMode || 1
+            );
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        risk,
+                        pixelBuffer
+                    }
+                },
+                [pixelBuffer]
             );
 
         } else {
