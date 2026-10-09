@@ -9,6 +9,9 @@ import { StegoEngine } from './StegoEngine.js';
 import { SteganalysisEngine } from './SteganalysisEngine.js';
 import { PngCodec } from './png/PngCodec.js';
 import { AdaptiveEngine } from './AdaptiveEngine.js';
+import { BinaryInspector } from './BinaryInspector.js';
+import { DiffEngine } from './DiffEngine.js';
+import { ZeroWidthDetector } from './ZeroWidthDetector.js';
 
 class StegoWorkerClientManager {
     constructor() {
@@ -366,6 +369,91 @@ class StegoWorkerClientManager {
 
         const data = new Uint8ClampedArray(pixelBuffer);
         return AdaptiveEngine.calculateStegoRisk(payloadBytes, width, height, data, lsbMode);
+    }
+
+    /**
+     * Faz 5: İkili Yapı (Binary Inspector) ve Dosya Triyajı
+     */
+    async inspectBinary({ fileBuffer, onProgress = null }) {
+        const workerBuffer = fileBuffer.slice(0);
+        const transferList = [workerBuffer];
+
+        const workerPromise = this._send(
+            'INSPECT_BINARY',
+            { fileBuffer: workerBuffer },
+            transferList,
+            onProgress
+        );
+
+        if (workerPromise) {
+            const res = await workerPromise;
+            return res.report;
+        }
+
+        // Fallback
+        return BinaryInspector.inspect(fileBuffer);
+    }
+
+    /**
+     * Faz 5: Görsel Karşılaştırma, PSNR/SSIM ve Fark Haritaları
+     */
+    async compareImages({ pixelBuffer1, pixelBuffer2, width, height, amplifier = 20, onProgress = null }) {
+        const workerBuf1 = pixelBuffer1.slice(0);
+        const workerBuf2 = pixelBuffer2.slice(0);
+        const transferList = [workerBuf1, workerBuf2];
+
+        const workerPromise = this._send(
+            'COMPARE_IMAGES',
+            { pixelBuffer1: workerBuf1, pixelBuffer2: workerBuf2, width, height, amplifier },
+            transferList,
+            onProgress
+        );
+
+        if (workerPromise) {
+            const res = await workerPromise;
+            return {
+                comparison: res.comparison,
+                ampDiffData: new Uint8ClampedArray(res.ampDiffBuffer),
+                lsbDiffData: new Uint8ClampedArray(res.lsbDiffBuffer),
+                width: res.width,
+                height: res.height
+            };
+        }
+
+        // Fallback
+        const img1 = { width, height, data: new Uint8ClampedArray(pixelBuffer1) };
+        const img2 = { width, height, data: new Uint8ClampedArray(pixelBuffer2) };
+        const comparison = DiffEngine.compare(img1, img2);
+        const ampDiff = DiffEngine.renderAmplifiedDiff(img1, img2, amplifier);
+        const lsbDiff = DiffEngine.renderLsbDiff(img1, img2);
+
+        return {
+            comparison,
+            ampDiffData: ampDiff.data,
+            lsbDiffData: lsbDiff.data,
+            width,
+            height
+        };
+    }
+
+    /**
+     * Faz 5: Görünmez Metin, BiDi Trojan ve Unicode Tag ASCII Smuggling Analizi
+     */
+    async analyzeText({ text, onProgress = null }) {
+        const workerPromise = this._send(
+            'ANALYZE_TEXT',
+            { text },
+            [],
+            onProgress
+        );
+
+        if (workerPromise) {
+            const res = await workerPromise;
+            return res.analysis;
+        }
+
+        // Fallback
+        return ZeroWidthDetector.analyze(text);
     }
 }
 

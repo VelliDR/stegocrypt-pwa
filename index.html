@@ -304,6 +304,90 @@
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+
+        .subtab-content { display: none; }
+        .subtab-content.active { display: block; }
+
+        .m3-sub-segmented {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            background-color: var(--md-surface-dim);
+            padding: 6px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            border: 1px solid var(--md-outline-variant);
+        }
+
+        .m3-sub-tab-btn {
+            padding: 8px 6px;
+            border: none;
+            background: transparent;
+            color: var(--md-on-surface-variant);
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            text-align: center;
+        }
+
+        .m3-sub-tab-btn.active {
+            background-color: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            font-weight: 700;
+        }
+
+        .forensic-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+            text-align: left;
+        }
+
+        .forensic-table th, .forensic-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--md-outline-variant);
+        }
+
+        .forensic-table th {
+            color: var(--md-primary);
+            font-weight: 700;
+            background: var(--md-surface-container);
+            position: sticky;
+            top: 0;
+        }
+
+        .forensic-stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .forensic-stat-card {
+            background: var(--md-surface-container-high);
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--md-outline-variant);
+            text-align: center;
+        }
+
+        .forensic-stat-card .val {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--md-primary);
+        }
+
+        .forensic-stat-card .lbl {
+            font-size: 0.68rem;
+            color: var(--md-on-surface-variant);
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body>
@@ -572,97 +656,291 @@
         </div>
     </section>
 
-    <!-- 3. STEGANALİZ SEKMESİ -->
+    <!-- 3. STEGANALİZ & FORENSİK TRİYAJ SEKMESİ -->
     <section id="tab-inspect" class="tab-content">
-        <div class="m3-banner">
-            <span style="font-size: 1.2rem;">🔬</span>
-            <span>Görselin en alt bitlerini (LSB) röntgen ve <b>χ² (Chi-Square)</b> ısı haritasıyla inceleyin; <b>Fridrich RS</b> steganaliziyle gizli veri yükünü tespit edin.</span>
+        <!-- Workbench Alt Sekme Menüsü (2x2 Grid) -->
+        <div class="m3-sub-segmented">
+            <button type="button" class="m3-sub-tab-btn active" id="btn-subtab-lsb">🔬 LSB Steganaliz</button>
+            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-binary">📦 İkili Yapı Triyajı</button>
+            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-diff">⚖️ Görsel Diff (PSNR)</button>
+            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-zerowidth">👻 Görünmez Metin</button>
         </div>
 
-        <div class="m3-field">
-            <label>Analiz Edilecek Görsel</label>
-            <div class="m3-dropzone" id="dropzone-inspect">
-                <p>🔍 Görseli buraya sürükleyin veya seçin (PNG / JPG / HEIC)</p>
-                <input type="file" id="file-inspect" accept="image/*,.heic,.heif" aria-label="Steganaliz edilecek görseli seçin">
+        <!-- 3.A LSB & STEGANALİZ SUBTAB -->
+        <div id="subtab-content-lsb" class="subtab-content active">
+            <div class="m3-banner">
+                <span style="font-size: 1.2rem;">🔬</span>
+                <span>Görselin en alt bitlerini (LSB) röntgen ve <b>χ² (Chi-Square)</b> ısı haritasıyla inceleyin; <b>Fridrich RS</b> steganaliziyle gizli veri yükünü tespit edin.</span>
             </div>
-        </div>
 
-        <div id="inspect-controls" style="display: none;">
             <div class="m3-field">
-                <label>Görünüm Modu</label>
-                <div class="radio-group" style="flex-direction: row; gap: 16px;">
-                    <label class="radio-option">
-                        <input type="radio" name="inspect-view-mode" value="bitplane" checked id="view-mode-bitplane">
-                        🔍 LSB Bit Düzlemi (Röntgen)
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="inspect-view-mode" value="heatmap" id="view-mode-heatmap">
-                        🌡️ χ² Bölgesel Isı Haritası (32x32)
-                    </label>
+                <label>Analiz Edilecek Görsel</label>
+                <div class="m3-dropzone" id="dropzone-inspect">
+                    <p>🔍 Görseli buraya sürükleyin veya seçin (PNG / JPG / HEIC)</p>
+                    <input type="file" id="file-inspect" accept="image/*,.heic,.heif" aria-label="Steganaliz edilecek görseli seçin">
                 </div>
             </div>
 
-            <div class="m3-field" id="container-inspect-channel">
-                <label>Röntgen Filtresi & Kanal</label>
-                <div class="radio-group" style="flex-direction: row; flex-wrap: wrap; gap: 8px;">
-                    <label class="radio-option">
-                        <input type="radio" name="inspect-channel" value="all" checked id="inspect-chan-all">
-                        🌈 RGB
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="inspect-channel" value="red" id="inspect-chan-red">
-                        🔴 Kırmızı
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="inspect-channel" value="green" id="inspect-chan-green">
-                        🟢 Yeşil
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="inspect-channel" value="blue" id="inspect-chan-blue">
-                        🔵 Mavi
-                    </label>
+            <div id="inspect-controls" style="display: none;">
+                <div class="m3-field">
+                    <label>Görünüm Modu</label>
+                    <div class="radio-group" style="flex-direction: row; gap: 16px;">
+                        <label class="radio-option">
+                            <input type="radio" name="inspect-view-mode" value="bitplane" checked id="view-mode-bitplane">
+                            🔍 LSB Bit Düzlemi (Röntgen)
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="inspect-view-mode" value="heatmap" id="view-mode-heatmap">
+                            🌡️ χ² Bölgesel Isı Haritası (32x32)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="m3-field" id="container-inspect-channel">
+                    <label>Röntgen Filtresi & Kanal</label>
+                    <div class="radio-group" style="flex-direction: row; flex-wrap: wrap; gap: 8px;">
+                        <label class="radio-option">
+                            <input type="radio" name="inspect-channel" value="all" checked id="inspect-chan-all">
+                            🌈 RGB
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="inspect-channel" value="red" id="inspect-chan-red">
+                            🔴 Kırmızı
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="inspect-channel" value="green" id="inspect-chan-green">
+                            🟢 Yeşil
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="inspect-channel" value="blue" id="inspect-chan-blue">
+                            🔵 Mavi
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Görsel Önizleme Canvas -->
+                <div class="m3-field">
+                    <label id="inspect-canvas-label">LSB Bit Düzlemi Röntgeni (Bit 0)</label>
+                    <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
+                        <canvas id="canvas-inspect" role="img" aria-label="LSB Bit Düzlemi Röntgeni veya Isı Haritası" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
+                    </div>
+                </div>
+
+                <!-- 1. Chi-Square Analiz Rapor Kartı -->
+                <div id="inspect-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">1. χ² (Chi-Square) Steganaliz Testi</span>
+                        <span id="inspect-prob-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
+                    </div>
+                    <h4 id="inspect-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Görsel Analiz Ediliyor...</h4>
+                    <p id="inspect-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
+                    <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
+                        <span id="inspect-stats">χ²: 0.00 | Serbestlik Derecesi: 0</span>
+                    </div>
+                </div>
+
+                <!-- 2. Fridrich RS Steganaliz Rapor Kartı -->
+                <div id="inspect-rs-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">2. Fridrich RS (Regular/Singular) Steganaliz</span>
+                        <span id="inspect-rs-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
+                    </div>
+                    <h4 id="inspect-rs-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">RS Analizi Yapılıyor...</h4>
+                    <p id="inspect-rs-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
+                    <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
+                        <span id="inspect-rs-stats">RM: 0.00% | SM: 0.00% | R-M: 0.00% | S-M: 0.00%</span>
+                    </div>
+                </div>
+
+                <!-- Steganaliz Karşılaştırma & Bilgi Notu -->
+                <div style="background: var(--md-surface-container-high); border-radius: 16px; padding: 12px 16px; margin-top: 16px; font-size: 0.78rem; color: var(--md-on-surface-variant); line-height: 1.45; border: 1px solid var(--md-outline-variant);">
+                    💡 <b>Bulgu & Akademik Karşılaştırma:</b><br>
+                    • <b>LSB Replacement:</b> Değer Çiftleri (PoVs) asimetrisi ve $R_M &lt; R_{-M}$ kayması nedeniyle hem χ² hem de RS tarafından yüksek doğrulukla tespit edilir.<br>
+                    • <b>LSB Matching (±1):</b> Pikselleri eşit olasılıkla +1/-1 kaydırdığı için $R_M \approx R_{-M}$ ve $S_M \approx S_{-M}$ simetrisi korunur; χ² ve RS tespit oranı <b>≈ %0</b> seviyesinde kalır.
+                </div>
+            </div>
+        </div>
+
+        <!-- 3.B İKİLİ YAPI & DOSYA TRİYAJI (BINARY INSPECTOR) SUBTAB -->
+        <div id="subtab-content-binary" class="subtab-content">
+            <div class="m3-banner">
+                <span style="font-size: 1.2rem;">📦</span>
+                <span>PNG ve JPEG dosyalarının ikili başlıklarını inceleyin; <b>IEND/EOI sonrası enjekte edilen ekleri (Trailing Overlay / ZIP Polyglot)</b> ve bozuk CRC'leri tespit edin.</span>
+            </div>
+
+            <div class="m3-field">
+                <label>İncelenecek Dosya</label>
+                <div class="m3-dropzone" id="dropzone-binary">
+                    <p id="label-binary-file">🔍 PNG veya JPEG dosyasını buraya sürükleyin veya seçin</p>
+                    <input type="file" id="file-binary" accept="image/png,image/jpeg,image/*,.png,.jpg,.jpeg" aria-label="İkili analizi yapılacak görseli seçin">
                 </div>
             </div>
 
-            <!-- Görsel Önizleme Canvas -->
-            <div class="m3-field">
-                <label id="inspect-canvas-label">LSB Bit Düzlemi Röntgeni (Bit 0)</label>
+            <div id="container-binary-results" style="display: none;">
+                <!-- Özet Kartı -->
+                <div id="binary-summary-card" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span id="binary-format-badge" style="font-size: 0.8rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 3px 8px; border-radius: 8px;">PNG</span>
+                        <span id="binary-size-badge" style="font-size: 0.75rem; color: var(--md-on-surface-variant);">0 KB</span>
+                    </div>
+                    <h4 id="binary-verdict-title" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Dosya Analiz Edildi</h4>
+                    <p id="binary-verdict-desc" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
+                </div>
+
+                <!-- Overlay / Trailing Injection Uyarı Kartı -->
+                <div id="binary-overlay-card" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;">
+                    <div style="font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                        🚨 IEND / EOI Sonrası Ek Veri Tespit Edildi! (Overlay Injection)
+                    </div>
+                    <p id="binary-overlay-details" style="font-size: 0.78rem; line-height: 1.4; margin-bottom: 8px;"></p>
+                    <div style="font-size: 0.72rem; font-weight: 600; margin-bottom: 4px;">İlk 32 Bayt Hex Görünümü:</div>
+                    <pre id="binary-overlay-hex" style="background: rgba(0,0,0,0.4); color: #fff; padding: 8px 10px; border-radius: 8px; font-family: monospace; font-size: 0.72rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 0;"></pre>
+                    <button type="button" class="m3-btn m3-btn-tonal" id="btn-download-overlay" style="margin-top: 10px; background: rgba(0,0,0,0.25); color: #fff; border-color: rgba(255,255,255,0.3);">💾 Tespit Edilen Eki İndir (Trailing Payload)</button>
+                </div>
+
+                <!-- Chunk / Marker Tablosu -->
+                <div style="background: var(--md-surface-dim); border-radius: 16px; padding: 14px 16px; border: 1px solid var(--md-outline);">
+                    <h4 style="font-size: 0.85rem; color: var(--md-primary); margin-bottom: 8px;">📋 Başlık & Segment / Chunk Tablosu</h4>
+                    <div style="max-height: 220px; overflow-y: auto; border: 1px solid var(--md-outline-variant); border-radius: 10px;">
+                        <table class="forensic-table" id="table-binary-chunks">
+                            <thead>
+                                <tr>
+                                    <th>Tip</th>
+                                    <th>Boyut</th>
+                                    <th>Ofset</th>
+                                    <th>CRC / Durum</th>
+                                    <th>Detay</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-binary-chunks">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3.C GÖRSEL KARŞILAŞTIRMA & FARK ANALİZİ (DIFF ENGINE) SUBTAB -->
+        <div id="subtab-content-diff" class="subtab-content">
+            <div class="m3-banner">
+                <span style="font-size: 1.2rem;">⚖️</span>
+                <span>Orijinal Taşıyıcı (Cover) ve Şifreli (Stego) görselleri piksel düzeyinde karşılaştırın. <b>PSNR (dB)</b> ve <b>SSIM</b> yapısal benzerlik metrikleriyle LSB değişimlerini görselleştirin.</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                <!-- 1. Cover Dropzone -->
+                <div class="m3-dropzone" id="dropzone-diff-cover" style="padding: 12px 8px;">
+                    <p id="label-diff-cover" style="font-size: 0.75rem;">1. Orijinal (Cover)</p>
+                    <input type="file" id="file-diff-cover" accept="image/*,.heic,.heif" aria-label="Orijinal taşıyıcı görseli seçin">
+                    <img id="preview-diff-cover" class="preview-img" alt="Cover Önizleme" style="max-height: 100px;">
+                </div>
+                <!-- 2. Stego Dropzone -->
+                <div class="m3-dropzone" id="dropzone-diff-stego" style="padding: 12px 8px;">
+                    <p id="label-diff-stego" style="font-size: 0.75rem;">2. Şifreli (Stego)</p>
+                    <input type="file" id="file-diff-stego" accept="image/*,.heic,.heif" aria-label="Şifreli görseli seçin">
+                    <img id="preview-diff-stego" class="preview-img" alt="Stego Önizleme" style="max-height: 100px;">
+                </div>
+            </div>
+
+            <button type="button" class="m3-btn" id="btn-run-diff" style="margin-bottom: 16px;">⚖️ Görselleri Karşılaştır & Farkı Analiz Et</button>
+
+            <div id="container-diff-results" style="display: none;">
+                <!-- Metrik Kartları (2x2) -->
+                <div class="forensic-stat-grid">
+                    <div class="forensic-stat-card">
+                        <div class="val" id="diff-psnr-val">-- dB</div>
+                        <div class="lbl">PSNR (Sinyal/Gürültü)</div>
+                    </div>
+                    <div class="forensic-stat-card">
+                        <div class="val" id="diff-ssim-val">--</div>
+                        <div class="lbl">SSIM (Yapısal Benzerlik)</div>
+                    </div>
+                    <div class="forensic-stat-card">
+                        <div class="val" id="diff-mse-val">--</div>
+                        <div class="lbl">MSE (Hata Kareleri Ort.)</div>
+                    </div>
+                    <div class="forensic-stat-card">
+                        <div class="val" id="diff-changed-val">--</div>
+                        <div class="lbl">Değişen Piksel Oranı</div>
+                    </div>
+                </div>
+
+                <!-- Görünüm Seçenekleri -->
+                <div class="m3-field" style="margin-top: 14px;">
+                    <label>Fark Görünüm Modu</label>
+                    <div class="radio-group" style="flex-direction: row; gap: 12px;">
+                        <label class="radio-option">
+                            <input type="radio" name="diff-view-mode" value="amplified" checked id="diff-mode-amplified">
+                            🔍 Büyütülmüş Fark
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="diff-view-mode" value="lsb" id="diff-mode-lsb">
+                            ✨ LSB Değişimleri
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Büyütme Çarpanı Slider -->
+                <div id="container-diff-slider" style="margin-bottom: 12px;">
+                    <label style="font-size: 0.78rem; color: var(--md-primary); font-weight: 600; display: block; margin-bottom: 4px;">
+                        Fark Büyütme Çarpanı: <span id="diff-amp-label">30x</span>
+                    </label>
+                    <input type="range" id="diff-amp-slider" min="5" max="100" value="30" step="5" style="width: 100%; accent-color: var(--md-primary);">
+                </div>
+
+                <!-- Canvas -->
                 <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
-                    <canvas id="canvas-inspect" role="img" aria-label="LSB Bit Düzlemi Röntgeni veya Isı Haritası" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
+                    <canvas id="canvas-diff" role="img" aria-label="Görsel Fark Haritası" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
                 </div>
             </div>
+        </div>
 
-            <!-- 1. Chi-Square Analiz Rapor Kartı -->
-            <div id="inspect-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">1. χ² (Chi-Square) Steganaliz Testi</span>
-                    <span id="inspect-prob-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
-                </div>
-                <h4 id="inspect-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Görsel Analiz Ediliyor...</h4>
-                <p id="inspect-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
-                <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
-                    <span id="inspect-stats">χ²: 0.00 | Serbestlik Derecesi: 0</span>
-                </div>
+        <!-- 3.D GÖRÜNMEZ METİN & ASCII SMUGGLING (ZERO-WIDTH) SUBTAB -->
+        <div id="subtab-content-zerowidth" class="subtab-content">
+            <div class="m3-banner">
+                <span style="font-size: 1.2rem;">👻</span>
+                <span>Metin içindeki gizli sıfır-genişlikli karakterleri (ZWSP, ZWNJ, ZWJ), Truva Atı <b>BiDi (RLO)</b> kontrollerini ve <b>Unicode Düzlem 14 ASCII Smuggling</b> etiketlerini tespit edip çözün.</span>
             </div>
 
-            <!-- 2. Fridrich RS Steganaliz Rapor Kartı -->
-            <div id="inspect-rs-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">2. Fridrich RS (Regular/Singular) Steganaliz</span>
-                    <span id="inspect-rs-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
-                </div>
-                <h4 id="inspect-rs-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">RS Analizi Yapılıyor...</h4>
-                <p id="inspect-rs-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
-                <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
-                    <span id="inspect-rs-stats">RM: 0.00% | SM: 0.00% | R-M: 0.00% | S-M: 0.00%</span>
-                </div>
+            <div class="m3-field">
+                <label>İncelenecek Şüpheli Metin</label>
+                <textarea id="text-zerowidth-input" placeholder="Şüpheli metni buraya yapıştırın (ChatGPT istemleri, sosyal medya mesajları, kod blokları)..." style="min-height: 85px;"></textarea>
             </div>
 
-            <!-- Steganaliz Karşılaştırma & Bilgi Notu -->
-            <div style="background: var(--md-surface-container-high); border-radius: 16px; padding: 12px 16px; margin-top: 16px; font-size: 0.78rem; color: var(--md-on-surface-variant); line-height: 1.45; border: 1px solid var(--md-outline-variant);">
-                💡 <b>Bulgu & Akademik Karşılaştırma:</b><br>
-                • <b>LSB Replacement:</b> Değer Çiftleri (PoVs) asimetrisi ve $R_M &lt; R_{-M}$ kayması nedeniyle hem χ² hem de RS tarafından yüksek doğrulukla tespit edilir.<br>
-                • <b>LSB Matching (±1):</b> Pikselleri eşit olasılıkla +1/-1 kaydırdığı için $R_M \approx R_{-M}$ ve $S_M \approx S_{-M}$ simetrisi korunur; χ² ve RS tespit oranı <b>≈ %0</b> seviyesinde kalır.
+            <button type="button" class="m3-btn" id="btn-analyze-zerowidth">🔍 Görünmez Karakterleri Tara</button>
+
+            <div id="container-zerowidth-results" style="display: none; margin-top: 16px;">
+                <!-- Durum Başlık Kartı -->
+                <div id="zerowidth-verdict-banner" class="m3-banner"></div>
+
+                <!-- Detay Rozetleri (Pills) -->
+                <div id="zerowidth-pills-grid" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;"></div>
+
+                <!-- ASCII Smuggling Çözülen İçerik -->
+                <div id="container-smuggled-ascii" style="display: none; margin-bottom: 14px;">
+                    <label style="font-size: 0.8rem; font-weight: 700; color: var(--md-primary); display: block; margin-bottom: 6px;">
+                        🔓 Çözülen ASCII Smuggling Yükü
+                    </label>
+                    <textarea id="text-smuggled-payload" readonly style="min-height: 60px; font-family: monospace; color: var(--md-primary); background: #000; border-color: var(--md-primary);"></textarea>
+                </div>
+
+                <!-- BiDi Trojan Uyarısı -->
+                <div id="container-bidi-warning" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.78rem; line-height: 1.4;">
+                    ⚠️ <b>BiDi Trojan Tespit Edildi:</b> Metinde Right-to-Left Override (RLO) veya ters yönde metin kontrol karakterleri bulundu! Bu karakterler zararlı dosya uzantılarını veya kod satırlarını ters çevirerek gizlemek için kullanılır.
+                </div>
+
+                <!-- Görselleştirilmiş Karakter Haritası -->
+                <div class="m3-field" style="margin-bottom: 14px;">
+                    <label>👁️ Görselleştirilmiş Karakter Haritası</label>
+                    <div id="zerowidth-highlighted-box" style="background: var(--md-surface-dim); border: 1px solid var(--md-outline); border-radius: 12px; padding: 12px; font-size: 0.85rem; line-height: 1.6; max-height: 140px; overflow-y: auto; word-break: break-all;"></div>
+                </div>
+
+                <!-- Temizlenmiş Metin -->
+                <div class="m3-field" style="margin-bottom: 0;">
+                    <label>🧹 Temizlenmiş Metin (Görünmez Karakterlerden Arındırılmış)</label>
+                    <textarea id="text-zerowidth-clean" readonly style="min-height: 60px;"></textarea>
+                    <button type="button" class="m3-btn m3-btn-tonal" id="btn-copy-clean-text" style="margin-top: 8px;">📋 Temizlenmiş Metni Kopyala</button>
+                </div>
             </div>
         </div>
     </section>

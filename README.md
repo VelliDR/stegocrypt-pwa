@@ -7,7 +7,7 @@
 ### İstemci Taraflı İstatistiksel Dirençli Steganografi, Kriptografi & Adli Bilişim Platformu
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests: Passing](https://img.shields.io/badge/Tests-42%20Unit%20%7C%2011%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
+[![Tests: Passing](https://img.shields.io/badge/Tests-56%20Unit%20%7C%2014%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
 [![PWA Ready](https://img.shields.io/badge/PWA-100%25%20Offline-brightgreen.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Security: AES-256-GCM](https://img.shields.io/badge/Security-AES--256--GCM-success.svg)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
 [![KDF: PBKDF2-SHA256](https://img.shields.io/badge/KDF-PBKDF2--100k%2F600k-orange.svg)](https://en.wikipedia.org/wiki/PBKDF2)
@@ -93,13 +93,30 @@ flowchart LR
 
 ---
 
-## 🔬 Adli Bilişim & Steganaliz Röntgeni
+## 🔬 Adli Bilişim & Stego-Workbench Laboratuvarı
 
-Uygulamanın **🔬 Steganaliz** sekmesi gelişmiş adli bilişim araçları sunar:
-1. **LSB Bit Düzlemi Röntgeni:** Bit 0 ve Bit 1 düzlemlerini RGB veya tekil renk kanalları (Kırmızı, Yeşil, Mavi) bazında ayrıştırıp görselleştirir.
-2. **Westfeld Pairs of Values $\chi^2$ Testi:** Değer çiftlerinin ($2k, 2k+1$) frekans dağılımını ölçerek Wilson-Hilferty normalleştirilmiş dönüşümüyle LSB manipülasyon olasılığını ve $p$-değerini raporlar.
-3. **Fridrich RS (Regular/Singular) Steganaliz:** $2 \times 2$ piksel blokları ve ters çevirme maskeleri ($M, -M$) kullanarak LSB yerine koyma asimetrisini hesaplar; gizli veri yük oranını ($\hat{p}$) matematiksel olarak tahmin eder.
-4. **χ² Bölgesel Isı Haritası (Heatmap):** $32 \times 32$ blok kayan pencerelerle yerel steganografik anomali yoğunluğunu renkli yarı saydam katman olarak haritalandırır.
+Uygulamanın **🔬 Steganaliz & Triyaj** sekmesi 4 entegre adli bilişim aracı sunar:
+
+### 1. 🔬 LSB Röntgeni & İstatistiksel Steganaliz
+* **LSB Bit Düzlemi Röntgeni:** Bit 0 ve Bit 1 düzlemlerini RGB veya tekil renk kanalları (Kırmızı, Yeşil, Mavi) bazında ayrıştırıp pikselleştirilmiş tuval üzerinde görselleştirir.
+* **Westfeld Pairs of Values $\chi^2$ Testi:** Değer çiftlerinin ($2k, 2k+1$) frekans dağılımını ölçerek Wilson-Hilferty normalleştirilmiş dönüşümüyle LSB manipülasyon olasılığını ve $p$-değerini raporlar.
+* **Fridrich RS (Regular/Singular) Steganaliz:** $2 \times 2$ piksel blokları ve ters çevirme maskeleri ($M, -M$) kullanarak LSB yerine koyma asimetrisini hesaplar; gizli veri yük oranını ($\hat{p}$) matematiksel olarak tahmin eder.
+* **χ² Bölgesel Isı Haritası (Heatmap):** $32 \times 32$ blok kayan pencerelerle yerel steganografik anomali yoğunluğunu renkli yarı saydam katman olarak haritalandırır.
+
+### 2. 📦 İkili Yapı & Dosya Triyajı (Binary Inspector)
+* **Saf İkili Başlık Taraması:** HTML5 Canvas ve DOM ortamından bağımsız çalışan saf JavaScript DataView ayrıştırıcısı.
+* **PNG & JPEG Yapı Analizi:** PNG chunk'ları (`IHDR`, `IDAT`, `IEND`, `tEXt`, `zTXt`, `iTXt`) ve Ethernet/PNG polinomlu CRC-32 sağlama toplamlarını doğrular; JPEG marker'larını (`SOI`, `APP1/EXIF`, `SOF0`, `COM`, `SOS`, `EOI`) raporlar.
+* **Trailing Data / Overlay Injection (Polyglot) Tespiti:** Dosya sonlandırıcıdan (`IEND` veya `EOI`) sonra eklenen gizli ek verileri bayt düzeyinde tespit eder, bilinen imza veritabanıyla (ZIP, PDF, 7z, RAR) eşleştirir ve **tek tıkla indirme (payload export)** imkânı sunar.
+
+### 3. ⚖️ Görsel Karşılaştırma & Fark Analizi (DiffEngine)
+* **Kayıpsız / Nicel Kalite Ölçümü:** Orijinal Taşıyıcı (Cover) ve Şifreli (Stego) görselleri piksel düzeyinde karşılaştırır.
+* **Metrikler:** Ortalama Hata Karesi (MSE), Tepe Sinyal-Gürültü Oranı (**PSNR** $\text{dB}$) ve $8 \times 8$ bloklu Yapısal Benzerlik İndeksi (**SSIM**).
+* **Fark Görselleştirme:** Çarpanlı büyütülmüş fark haritası ($|I_1 - I_2| \times k$) ve yalnızca değişen bitleri altın sarısıyla işaretleyen **LSB Değişim Haritası**.
+
+### 4. 👻 Görünmez Metin & ASCII Smuggling Dedektörü (ZeroWidthDetector)
+* **Sıfır-Genişlikli Karakterler:** Metinlerde gizlenen ZWSP, ZWNJ, ZWJ, WJ, ZWNBSP ve görünmez karakterleri tespit eder.
+* **BiDi Truva Atı Uyarısı:** Right-to-Left Override (`U+202E`, RLO) ve yönlendirme bayraklarını yakalayarak uzantı/kod gizleme saldırılarını ifşa eder.
+* **Unicode Düzlem 14 ASCII Smuggling:** ChatGPT, LLM ve güvenlik filtrelerini atlatmak için kullanılan Unicode Tag (`\u{E0000}..\u{E007F}`) etiketlerini yakalar, gizlenen ASCII yükünü anında deşifre eder ve metni tüm görünmez parazitlerden arındırır.
 
 ---
 
@@ -111,7 +128,7 @@ Proje, hem Node.js yerel test ortamında birim testleriyle hem de Playwright ile
 # Bağımlılıkları yükleyin
 npm install
 
-# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient, Matching & RS)
+# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient, Matching & RS, BinaryInspector, DiffEngine, ZeroWidthDetector)
 npm run test:unit
 
 # 2. Tarayıcı Uçtan Uca (E2E) Testleri (Playwright + Chromium)
@@ -119,8 +136,8 @@ npm run test:e2e
 ```
 
 **Mevcut Test Durumu:**
-- **42 / 42** Birim Testi Başarılı (`node:test`, 1050 ms)
-- **11 / 11** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact, LSB Matching & RS analizi, İçerik Duyarlı Doku Kafesi & Stego Risk İndeksi)
+- **56 / 56** Birim Testi Başarılı (`node:test`, ~1050 ms, %100 Başarı)
+- **14 / 14** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact, LSB Matching & RS analizi, İçerik Duyarlı Doku Kafesi & Stego Risk İndeksi, Binary Inspector & Overlay Injection, Diff Engine & PSNR/SSIM, Zero-Width & Unicode Plane 14 ASCII Smuggling)
 
 ---
 

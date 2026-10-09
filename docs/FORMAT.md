@@ -129,3 +129,47 @@ Aşağıdaki test vektörü, bağımsız kütüphanelerin uyumluluğunu test etm
   `1c36001fffc8f09d85489f664a7c06eb6ca9cb0bc7f5979ff20311f99c9c82ee30ad43be`
 - **Tam Paket Başlığı (36B Hex):**
   `5354473100000024000102030405060708090a0b0c0d0e0fa0a1a2a3a4a5a6a7a8a9aaab`
+
+---
+
+## 6. Faz 5: Stego-Workbench & Adli Triyaj Spesifikasyonu
+
+Faz 5, StegoCrypt'i kapsamlı bir adli inceleme ve analiz laboratuvarına dönüştürür.
+
+### 6.1 İkili Yapı (Binary Inspector) & Trailing Overlay Tespiti
+DOM ve Canvas ortamından bağımsız çalışan ikili analizci (`BinaryInspector.js`), dosya başlıklarını ve sonlandırıcılarını inceler:
+
+1. **PNG Chunk Denetimi:**
+   - 8 baytlık PNG imzası (`89 50 4E 47 0D 0A 1A 0A`) doğrulanır.
+   - Tüm chunk'lar (`IHDR`, `PLTE`, `IDAT`, `tEXt`, `zTXt`, `iTXt`, `IEND`) taranır.
+   - Her chunk için Ethernet/PNG polinomu $P(x) = \text{0xEDB88320}$ ile CRC-32 sağlama toplamı hesaplanıp `chunk.crc` ile karşılaştırılır.
+2. **Trailing Data (Overlay Injection / Polyglot) Tespiti:**
+   - Standart PNG dosyalarında `IEND` chunk'ının bitiş ofseti ($O_{\text{iend}} = \text{offset} + 12$) dosya boyutuna eşit olmalıdır ($O_{\text{iend}} = L$).
+   - Benzer şekilde JPEG dosyalarında `EOI` (`0xFFD9`) marker'ının sonu dosya boyutuna eşit olmalıdır ($O_{\text{eoi}} = L$).
+   - Eğer $O < L$ ise, dosya sonlandırıcıdan sonra eklenmiş veri (trailing data) kesin olarak saptanır:
+     $$\text{Overlay Boyutu} = L - O$$
+   - Ek verinin ilk baytları bilinen imza veritabanıyla (ZIP: `PK\x03\x04`, PDF: `%PDF-`, 7z: `7z\xBC\xAF\x27\x1C`, RAR: `Rar!\x1A\x07`) eşleştirilerek dosya türü teşhis edilir ve tek tıkla dışa aktarılır.
+
+### 6.2 Görsel Fark Analizi & Sadakat Metrikleri (DiffEngine)
+Taşıyıcı (Cover, $I_1$) ve Şifreli (Stego, $I_2$) görseller piksel düzeyinde karşılaştırılır:
+
+1. **MSE (Mean Squared Error):**
+   $$\text{MSE} = \frac{1}{3 W H} \sum_{x=1}^{W} \sum_{y=1}^{H} \sum_{c \in \{R,G,B\}} (I_1(x,y,c) - I_2(x,y,c))^2$$
+2. **PSNR (Peak Signal-to-Noise Ratio):**
+   $$\text{PSNR} = 10 \cdot \log_{10}\left(\frac{255^2}{\text{MSE}}\right) \quad (\text{MSE} = 0 \implies \infty)$$
+3. **SSIM (Structural Similarity Index Measure):**
+   Standart $8 \times 8$ bloklar ve lüminans ($Y = 0.299R + 0.587G + 0.114B$) üzerinde hesaplanır ($C_1 = 6.5025, C_2 = 58.5225$):
+   $$\text{SSIM}(x, y) = \frac{(2\mu_x\mu_y + C_1)(2\sigma_{xy} + C_2)}{(\mu_x^2 + \mu_y^2 + C_1)(\sigma_x^2 + \sigma_y^2 + C_2)}$$
+4. **Büyütülmüş Fark Haritası:** $|I_1(x,y) - I_2(x,y)| \times k$ çarpanı ile görselleştirilir ($k \in [5, 100]$).
+5. **LSB Düzlem Değişim Haritası:** Sadece en alt biti ($b_0$) değişen pikseller parlak altın sarısı (`#FFD700`) ile işaretlenir; değişmeyen pikseller koyulaştırılmış gri arka planda sunulur.
+
+### 6.3 Görünmez Karakter, BiDi Trojan ve ASCII Smuggling (ZeroWidthDetector)
+Metin tabanlı adli inceleme modülü:
+1. **Sıfır-Genişlikli Karakterler:** ZWSP (`U+200B`), ZWNJ (`U+200C`), ZWJ (`U+200D`), WJ (`U+2060`), ZWNBSP (`U+FEFF`), MVS (`U+180E`), SHY (`U+00AD`) ve görünmez matematik operatörleri taranır.
+2. **BiDi Truva Atı Saldırıları:** Right-to-Left Override (`U+202E`, RLO), LRO, RLE, LRE gibi yönlendirme bayrakları tespit edilerek uzantı/kod gizleme girişimleri uyarılır.
+3. **Unicode Düzlem 14 ASCII Smuggling:**
+   - Unicode Tag aralığı: $\text{U+E0000} .. \text{U+E007F}$.
+   - Tag karakteri $cp \in [\text{0xE0020}, \text{0xE007E}]$ için açık ASCII karakteri:
+     $$\text{Char} = \text{String.fromCharCode}(cp - \text{0xE0000})$$
+   - Kaçırılan gizli ASCII istemi/yükü anında deşifre edilerek ekrana dökülür; metin tüm görünmez parazitlerden arındırılarak temiz haliyle sunulur.
+

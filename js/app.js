@@ -17,6 +17,9 @@ import { SteganalysisEngine } from './SteganalysisEngine.js';
 import { QREngine } from './QREngine.js';
 import { StegoWorkerClient } from './StegoWorkerClient.js';
 import { PngCodec } from './png/PngCodec.js';
+import { BinaryInspector } from './BinaryInspector.js';
+import { DiffEngine } from './DiffEngine.js';
+import { ZeroWidthDetector } from './ZeroWidthDetector.js';
 
 // ---------- Durum Değişkenleri ----------
 let currentHideCanvasData = null;
@@ -1085,6 +1088,421 @@ if (dropzoneInspect) setupDropzone(dropzoneInspect, processInspectFile);
         }
     });
 });
+
+// ---------- FAZ 5: STEGO-WORKBENCH & FORENSİK TRİYAJ ----------
+// 1. Alt Sekme Menüsü (LSB / Binary / Diff / Zero-Width)
+const btnSubtabLsb = document.getElementById('btn-subtab-lsb');
+const btnSubtabBinary = document.getElementById('btn-subtab-binary');
+const btnSubtabDiff = document.getElementById('btn-subtab-diff');
+const btnSubtabZeroWidth = document.getElementById('btn-subtab-zerowidth');
+
+const subtabContentLsb = document.getElementById('subtab-content-lsb');
+const subtabContentBinary = document.getElementById('subtab-content-binary');
+const subtabContentDiff = document.getElementById('subtab-content-diff');
+const subtabContentZeroWidth = document.getElementById('subtab-content-zerowidth');
+
+function switchInspectSubtab(activeTab) {
+    [btnSubtabLsb, btnSubtabBinary, btnSubtabDiff, btnSubtabZeroWidth].forEach(b => b?.classList.remove('active'));
+    [subtabContentLsb, subtabContentBinary, subtabContentDiff, subtabContentZeroWidth].forEach(c => c?.classList.remove('active'));
+
+    if (activeTab === 'lsb') {
+        btnSubtabLsb?.classList.add('active');
+        subtabContentLsb?.classList.add('active');
+    } else if (activeTab === 'binary') {
+        btnSubtabBinary?.classList.add('active');
+        subtabContentBinary?.classList.add('active');
+    } else if (activeTab === 'diff') {
+        btnSubtabDiff?.classList.add('active');
+        subtabContentDiff?.classList.add('active');
+    } else if (activeTab === 'zerowidth') {
+        btnSubtabZeroWidth?.classList.add('active');
+        subtabContentZeroWidth?.classList.add('active');
+    }
+}
+
+if (btnSubtabLsb) btnSubtabLsb.addEventListener('click', () => switchInspectSubtab('lsb'));
+if (btnSubtabBinary) btnSubtabBinary.addEventListener('click', () => switchInspectSubtab('binary'));
+if (btnSubtabDiff) btnSubtabDiff.addEventListener('click', () => switchInspectSubtab('diff'));
+if (btnSubtabZeroWidth) btnSubtabZeroWidth.addEventListener('click', () => switchInspectSubtab('zerowidth'));
+
+// 2. İkili Yapı (Binary Inspector) & Dosya Triyajı
+const dropzoneBinary = document.getElementById('dropzone-binary');
+const fileBinaryInput = document.getElementById('file-binary');
+const labelBinaryFile = document.getElementById('label-binary-file');
+const containerBinaryResults = document.getElementById('container-binary-results');
+const binaryFormatBadge = document.getElementById('binary-format-badge');
+const binarySizeBadge = document.getElementById('binary-size-badge');
+const binaryVerdictTitle = document.getElementById('binary-verdict-title');
+const binaryVerdictDesc = document.getElementById('binary-verdict-desc');
+const binaryOverlayCard = document.getElementById('binary-overlay-card');
+const binaryOverlayDetails = document.getElementById('binary-overlay-details');
+const binaryOverlayHex = document.getElementById('binary-overlay-hex');
+const btnDownloadOverlay = document.getElementById('btn-download-overlay');
+const tbodyBinaryChunks = document.getElementById('tbody-binary-chunks');
+
+let lastTrailingPayload = null;
+
+async function processBinaryFile(file) {
+    if (!file) return;
+    try {
+        showStatus("İkili dosya başlıkları ve chunk'ları taranıyor...");
+        if (labelBinaryFile) labelBinaryFile.innerText = `📄 ${file.name}`;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const report = await StegoWorkerClient.inspectBinary({
+            fileBuffer: arrayBuffer,
+            onProgress: (pct, msg) => showStatus(msg)
+        });
+
+        if (containerBinaryResults) containerBinaryResults.style.display = 'block';
+        if (binaryFormatBadge) binaryFormatBadge.innerText = report.format.toUpperCase();
+        if (binarySizeBadge) binarySizeBadge.innerText = `${(report.fileSize / 1024).toFixed(1)} KB (${report.fileSize.toLocaleString()} B)`;
+
+        if (binaryVerdictTitle) binaryVerdictTitle.innerText = report.verdict || "Analiz Tamamlandı";
+        if (binaryVerdictDesc) binaryVerdictDesc.innerText = report.verdictDetails || "";
+
+        // Overlay Injection Kontrolü
+        if (report.trailingData) {
+            lastTrailingPayload = report.trailingData;
+            if (binaryOverlayCard) binaryOverlayCard.style.display = 'block';
+            if (binaryOverlayDetails) {
+                binaryOverlayDetails.innerHTML = `<b>Tespit Edilen İmza:</b> ${report.trailingData.identifiedSignature}<br>` +
+                    `<b>Başlangıç Ofseti:</b> ${report.trailingData.offset.toLocaleString()} | <b>Ek Boyutu:</b> ${report.trailingData.length.toLocaleString()} bayt (~${(report.trailingData.length / 1024).toFixed(1)} KB)`;
+            }
+            if (binaryOverlayHex) {
+                binaryOverlayHex.innerText = report.trailingData.hexPreview;
+            }
+        } else {
+            lastTrailingPayload = null;
+            if (binaryOverlayCard) binaryOverlayCard.style.display = 'none';
+        }
+
+        // Chunk / Marker Tablosu Doldurma
+        if (tbodyBinaryChunks) {
+            tbodyBinaryChunks.innerHTML = '';
+            if (report.format === 'png' && report.chunks) {
+                report.chunks.forEach(ch => {
+                    const tr = document.createElement('tr');
+                    const crcBadge = ch.crcValid 
+                        ? `<span style="color: var(--md-primary); font-weight: 600;">✓ Geçerli</span>` 
+                        : `<span style="color: var(--md-error); font-weight: 700;">✗ Hatalı</span>`;
+                    tr.innerHTML = `
+                        <td><b>${ch.type}</b></td>
+                        <td>${ch.length.toLocaleString()} B</td>
+                        <td>0x${ch.offset.toString(16).toUpperCase()}</td>
+                        <td>${crcBadge}</td>
+                        <td style="color: var(--md-on-surface-variant);">${ch.detail || '-'}</td>
+                    `;
+                    tbodyBinaryChunks.appendChild(tr);
+                });
+            } else if (report.format === 'jpeg' && report.markers) {
+                report.markers.forEach(mk => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><b>${mk.code}</b></td>
+                        <td>${mk.length ? mk.length.toLocaleString() + ' B' : '-'}</td>
+                        <td>0x${mk.offset.toString(16).toUpperCase()}</td>
+                        <td>-</td>
+                        <td style="color: var(--md-on-surface-variant);">${mk.name}</td>
+                    `;
+                    tbodyBinaryChunks.appendChild(tr);
+                });
+            }
+        }
+
+        hideStatus();
+    } catch (err) {
+        showStatus("İkili analiz hatası: " + err.message, true);
+    }
+}
+
+if (fileBinaryInput) fileBinaryInput.addEventListener('change', (e) => processBinaryFile(e.target.files[0]));
+if (dropzoneBinary) setupDropzone(dropzoneBinary, processBinaryFile);
+
+if (btnDownloadOverlay) {
+    btnDownloadOverlay.addEventListener('click', () => {
+        if (!lastTrailingPayload || !lastTrailingPayload.bytes) return;
+        const blob = new Blob([lastTrailingPayload.bytes], { type: 'application/octet-stream' });
+        const ext = lastTrailingPayload.possibleExtension || 'bin';
+        downloadBlob(blob, `extracted_payload.${ext}`);
+    });
+}
+
+// 3. Görsel Karşılaştırma & Fark Analizi (Diff Engine)
+const dropzoneDiffCover = document.getElementById('dropzone-diff-cover');
+const fileDiffCoverInput = document.getElementById('file-diff-cover');
+const previewDiffCover = document.getElementById('preview-diff-cover');
+const labelDiffCover = document.getElementById('label-diff-cover');
+
+const dropzoneDiffStego = document.getElementById('dropzone-diff-stego');
+const fileDiffStegoInput = document.getElementById('file-diff-stego');
+const previewDiffStego = document.getElementById('preview-diff-stego');
+const labelDiffStego = document.getElementById('label-diff-stego');
+
+const btnRunDiff = document.getElementById('btn-run-diff');
+const containerDiffResults = document.getElementById('container-diff-results');
+
+const diffPsnrVal = document.getElementById('diff-psnr-val');
+const diffSsimVal = document.getElementById('diff-ssim-val');
+const diffMseVal = document.getElementById('diff-mse-val');
+const diffChangedVal = document.getElementById('diff-changed-val');
+
+const diffModeAmplified = document.getElementById('diff-mode-amplified');
+const diffModeLsb = document.getElementById('diff-mode-lsb');
+const containerDiffSlider = document.getElementById('container-diff-slider');
+const diffAmpSlider = document.getElementById('diff-amp-slider');
+const diffAmpLabel = document.getElementById('diff-amp-label');
+const canvasDiff = document.getElementById('canvas-diff');
+
+let diffCoverData = null;
+let diffStegoData = null;
+let currentDiffAmpData = null;
+let currentDiffLsbData = null;
+
+async function loadDiffImage(file, isCover) {
+    if (!file) return;
+    try {
+        showStatus(isCover ? "Cover görseli yükleniyor..." : "Stego görseli yükleniyor...");
+        let imgData = null;
+        const isPng = file.type === 'image/png' || (file.name && /\.png$/i.test(file.name));
+        if (isPng) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const decoded = await StegoWorkerClient.decodePng(arrayBuffer);
+                imgData = {
+                    width: decoded.width,
+                    height: decoded.height,
+                    data: decoded.data
+                };
+            } catch (err) {
+                console.warn("PngCodec fallback to ImageEngine:", err);
+            }
+        }
+        if (!imgData) {
+            const img = await ImageEngine.loadImage(file);
+            const processed = ImageEngine.processToCanvas(img, 1920);
+            imgData = processed.imageData;
+        }
+
+        if (isCover) {
+            diffCoverData = imgData;
+            if (previewDiffCover) setPreviewImage(previewDiffCover, file);
+            if (labelDiffCover) labelDiffCover.innerText = `1. Cover (${imgData.width}x${imgData.height})`;
+        } else {
+            diffStegoData = imgData;
+            if (previewDiffStego) setPreviewImage(previewDiffStego, file);
+            if (labelDiffStego) labelDiffStego.innerText = `2. Stego (${imgData.width}x${imgData.height})`;
+        }
+        hideStatus();
+    } catch (err) {
+        showStatus("Görsel yükleme hatası: " + err.message, true);
+    }
+}
+
+if (fileDiffCoverInput) fileDiffCoverInput.addEventListener('change', (e) => loadDiffImage(e.target.files[0], true));
+if (dropzoneDiffCover) setupDropzone(dropzoneDiffCover, (file) => loadDiffImage(file, true));
+
+if (fileDiffStegoInput) fileDiffStegoInput.addEventListener('change', (e) => loadDiffImage(e.target.files[0], false));
+if (dropzoneDiffStego) setupDropzone(dropzoneDiffStego, (file) => loadDiffImage(file, false));
+
+function renderDiffCanvas(isLsbMode) {
+    if (!canvasDiff) return;
+    const dataToRender = isLsbMode ? currentDiffLsbData : currentDiffAmpData;
+    if (!dataToRender) return;
+
+    canvasDiff.width = dataToRender.width;
+    canvasDiff.height = dataToRender.height;
+    const ctx = canvasDiff.getContext('2d');
+    const imgData = ctx.createImageData(dataToRender.width, dataToRender.height);
+    imgData.data.set(dataToRender.data);
+    ctx.putImageData(imgData, 0, 0);
+}
+
+async function runDiffComparison() {
+    if (!diffCoverData || !diffStegoData) {
+        showStatus("Lütfen hem Cover hem de Stego görselini seçin.", true);
+        return;
+    }
+    if (diffCoverData.width !== diffStegoData.width || diffCoverData.height !== diffStegoData.height) {
+        showStatus(`Görsel boyutları eşleşmiyor! Cover: ${diffCoverData.width}x${diffCoverData.height}, Stego: ${diffStegoData.width}x${diffStegoData.height}`, true);
+        return;
+    }
+
+    try {
+        const amp = diffAmpSlider ? parseInt(diffAmpSlider.value, 10) : 30;
+        showStatus("Piksel farkları, PSNR ve SSIM hesaplanıyor...");
+
+        const res = await StegoWorkerClient.compareImages({
+            pixelBuffer1: diffCoverData.data.buffer,
+            pixelBuffer2: diffStegoData.data.buffer,
+            width: diffCoverData.width,
+            height: diffCoverData.height,
+            amplifier: amp,
+            onProgress: (pct, msg) => showStatus(msg)
+        });
+
+        currentDiffAmpData = { width: res.width, height: res.height, data: res.ampDiffData };
+        currentDiffLsbData = { width: res.width, height: res.height, data: res.lsbDiffData };
+
+        const comp = res.comparison;
+        const changedPct = (comp.changedPercent !== undefined ? comp.changedPercent : comp.changedPixelsPercent) || 0;
+        const changedCount = (comp.changedPixels !== undefined ? comp.changedPixels : 0);
+
+        if (diffPsnrVal) diffPsnrVal.innerText = comp.psnr === Infinity ? '∞ dB' : `${typeof comp.psnr === 'number' ? comp.psnr.toFixed(2) : comp.psnr} dB`;
+        if (diffSsimVal) diffSsimVal.innerText = typeof comp.ssim === 'number' ? comp.ssim.toFixed(4) : (comp.ssim || '--');
+        if (diffMseVal) diffMseVal.innerText = typeof comp.mse === 'number' ? comp.mse.toFixed(3) : (comp.mse || '--');
+        if (diffChangedVal) diffChangedVal.innerText = `%${changedPct.toFixed(2)} (${changedCount.toLocaleString()})`;
+
+        if (containerDiffResults) containerDiffResults.style.display = 'block';
+
+        const isLsb = diffModeLsb && diffModeLsb.checked;
+        if (containerDiffSlider) containerDiffSlider.style.display = isLsb ? 'none' : 'block';
+        renderDiffCanvas(isLsb);
+
+        hideStatus();
+    } catch (err) {
+        showStatus("Fark analizi hatası: " + err.message, true);
+    }
+}
+
+if (btnRunDiff) btnRunDiff.addEventListener('click', runDiffComparison);
+
+[diffModeAmplified, diffModeLsb].forEach(r => {
+    if (r) r.addEventListener('change', () => {
+        const isLsb = diffModeLsb && diffModeLsb.checked;
+        if (containerDiffSlider) containerDiffSlider.style.display = isLsb ? 'none' : 'block';
+        renderDiffCanvas(isLsb);
+    });
+});
+
+if (diffAmpSlider) {
+    diffAmpSlider.addEventListener('input', (e) => {
+        if (diffAmpLabel) diffAmpLabel.innerText = `${e.target.value}x`;
+    });
+    diffAmpSlider.addEventListener('change', () => {
+        if (diffCoverData && diffStegoData && (!diffModeLsb || !diffModeLsb.checked)) {
+            runDiffComparison();
+        }
+    });
+}
+
+// 4. Görünmez Metin & ASCII Smuggling Dedektörü
+const textZeroWidthInput = document.getElementById('text-zerowidth-input');
+const btnAnalyzeZeroWidth = document.getElementById('btn-analyze-zerowidth');
+const containerZeroWidthResults = document.getElementById('container-zerowidth-results');
+const zeroWidthVerdictBanner = document.getElementById('zerowidth-verdict-banner');
+const zeroWidthPillsGrid = document.getElementById('zerowidth-pills-grid');
+const containerSmuggledAscii = document.getElementById('container-smuggled-ascii');
+const textSmuggledPayload = document.getElementById('text-smuggled-payload');
+const containerBidiWarning = document.getElementById('container-bidi-warning');
+const zeroWidthHighlightedBox = document.getElementById('zerowidth-highlighted-box');
+const textZeroWidthClean = document.getElementById('text-zerowidth-clean');
+const btnCopyCleanText = document.getElementById('btn-copy-clean-text');
+
+async function processZeroWidthAnalysis() {
+    const text = textZeroWidthInput ? textZeroWidthInput.value : '';
+    if (!text) {
+        showStatus("Lütfen analiz edilecek metni girin.", true);
+        return;
+    }
+
+    try {
+        showStatus("Görünmez karakterler ve Unicode Tag'leri taranıyor...");
+        const res = await StegoWorkerClient.analyzeText({ text });
+
+        if (containerZeroWidthResults) containerZeroWidthResults.style.display = 'block';
+
+        // Durum Değerlendirmesi
+        const isClean = !res.hasZeroWidth && !res.hasBidi && !res.hasTags;
+        if (zeroWidthVerdictBanner) {
+            if (isClean) {
+                zeroWidthVerdictBanner.className = 'm3-banner';
+                zeroWidthVerdictBanner.style.background = 'var(--md-primary-container)';
+                zeroWidthVerdictBanner.style.color = 'var(--md-on-primary-container)';
+                zeroWidthVerdictBanner.innerHTML = `<span style="font-size: 1.2rem;">✅</span><span><b>Metin Temiz:</b> Herhangi bir gizli veya sıfır-genişlikli karakter tespit edilmedi.</span>`;
+            } else {
+                zeroWidthVerdictBanner.className = 'm3-banner';
+                zeroWidthVerdictBanner.style.background = 'var(--md-error-container)';
+                zeroWidthVerdictBanner.style.color = 'var(--md-on-error)';
+                zeroWidthVerdictBanner.innerHTML = `<span style="font-size: 1.2rem;">🚨</span><span><b>Gizli Karakter Tespit Edildi:</b> Toplam <b>${res.totalInvisible}</b> adet görünmez karakter / Unicode Tag bulundu!</span>`;
+            }
+        }
+
+        // Rozetler (Pills)
+        if (zeroWidthPillsGrid) {
+            const counts = res.counts;
+            const items = [
+                { label: 'Plane 14 Tags (ASCII Smuggling)', count: counts.plane14Tags, color: '#f59e0b' },
+                { label: 'ZWSP (U+200B)', count: counts.zwsp, color: 'var(--md-primary)' },
+                { label: 'ZWNJ (U+200C)', count: counts.zwnj, color: 'var(--md-primary)' },
+                { label: 'ZWJ (U+200D)', count: counts.zwj, color: 'var(--md-primary)' },
+                { label: 'ZWNBSP (U+FEFF)', count: counts.zwnbsp, color: 'var(--md-primary)' },
+                { label: 'WJ (U+2060)', count: counts.wj, color: 'var(--md-primary)' },
+                { label: 'SHY (U+00AD)', count: counts.shy, color: 'var(--md-primary)' },
+                { label: 'BiDi Trojans', count: counts.bidiTrojan, color: '#ef4444' }
+            ];
+
+            zeroWidthPillsGrid.innerHTML = items
+                .filter(it => it.count > 0 || !isClean)
+                .map(it => `
+                    <span style="font-size: 0.72rem; padding: 4px 8px; border-radius: 8px; background: var(--md-surface-container-high); border: 1px solid var(--md-outline-variant); color: ${it.count > 0 ? it.color : 'var(--md-on-surface-variant)'};">
+                        <b>${it.count}</b> ${it.label}
+                    </span>
+                `).join('');
+        }
+
+        // ASCII Smuggling Çözülen Metin
+        const smuggled = res.smuggledText || res.smuggledAscii;
+        if (containerSmuggledAscii) {
+            if (smuggled) {
+                containerSmuggledAscii.style.display = 'block';
+                if (textSmuggledPayload) textSmuggledPayload.value = smuggled;
+            } else {
+                containerSmuggledAscii.style.display = 'none';
+            }
+        }
+
+        // BiDi Trojan Uyarısı
+        if (containerBidiWarning) {
+            containerBidiWarning.style.display = (res.hasBidi || (res.counts && res.counts.bidiTrojan > 0)) ? 'block' : 'none';
+        }
+
+        // Görselleştirilmiş Metin (Badges)
+        if (zeroWidthHighlightedBox) {
+            zeroWidthHighlightedBox.innerHTML = res.highlightedHtml || res.annotatedHtml || '';
+        }
+
+        // Temizlenmiş Metin
+        if (textZeroWidthClean) {
+            textZeroWidthClean.value = res.cleanText !== undefined ? res.cleanText : (res.cleanedText || '');
+        }
+
+        hideStatus();
+    } catch (err) {
+        showStatus("Metin analiz hatası: " + err.message, true);
+    }
+}
+
+if (btnAnalyzeZeroWidth) btnAnalyzeZeroWidth.addEventListener('click', processZeroWidthAnalysis);
+if (textZeroWidthInput) {
+    let textTimer = null;
+    textZeroWidthInput.addEventListener('input', () => {
+        clearTimeout(textTimer);
+        textTimer = setTimeout(() => {
+            if (textZeroWidthInput.value.trim().length > 0) {
+                processZeroWidthAnalysis();
+            }
+        }, 300);
+    });
+}
+
+if (btnCopyCleanText) {
+    btnCopyCleanText.addEventListener('click', async () => {
+        if (!textZeroWidthClean || !textZeroWidthClean.value) return;
+        await navigator.clipboard.writeText(textZeroWidthClean.value);
+        showStatus("📋 Temizlenmiş metin panoya kopyalandı!");
+    });
+}
 
 // ---------- QR KOD ÜRETİCİ & TARAYICI İŞLEMLERİ ----------
 if (btnShowQr) {

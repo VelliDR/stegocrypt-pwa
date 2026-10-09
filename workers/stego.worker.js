@@ -11,6 +11,9 @@ import { CompressionEngine } from '../js/CompressionEngine.js';
 import { SteganalysisEngine } from '../js/SteganalysisEngine.js';
 import { PngCodec } from '../js/png/PngCodec.js';
 import { AdaptiveEngine } from '../js/AdaptiveEngine.js';
+import { BinaryInspector } from '../js/BinaryInspector.js';
+import { DiffEngine } from '../js/DiffEngine.js';
+import { ZeroWidthDetector } from '../js/ZeroWidthDetector.js';
 
 function sendProgress(id, percent, text) {
     self.postMessage({ type: 'PROGRESS', id, percent, text });
@@ -257,6 +260,68 @@ self.onmessage = async (e) => {
                 },
                 [pixelBuffer]
             );
+
+        } else if (action === 'INSPECT_BINARY') {
+            // data: { fileBuffer }
+            const { fileBuffer } = data;
+            sendProgress(id, 30, "Dosya ikili yapısı taranıyor...");
+            const report = BinaryInspector.inspect(fileBuffer);
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        report,
+                        fileBuffer
+                    }
+                },
+                [fileBuffer]
+            );
+
+        } else if (action === 'COMPARE_IMAGES') {
+            // data: { pixelBuffer1, pixelBuffer2, width, height, amplifier }
+            const { pixelBuffer1, pixelBuffer2, width, height } = data;
+            const amplifier = data.amplifier || 20;
+
+            const img1 = { width, height, data: new Uint8ClampedArray(pixelBuffer1) };
+            const img2 = { width, height, data: new Uint8ClampedArray(pixelBuffer2) };
+
+            sendProgress(id, 25, "Görsel farkları ve PSNR hesaplanıyor...");
+            const comp = DiffEngine.compare(img1, img2);
+
+            sendProgress(id, 60, "Büyütülmüş fark haritası ve LSB düzlemleri üretiliyor...");
+            const ampDiff = DiffEngine.renderAmplifiedDiff(img1, img2, amplifier);
+            const lsbDiff = DiffEngine.renderLsbDiff(img1, img2);
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        comparison: comp,
+                        ampDiffBuffer: ampDiff.data.buffer,
+                        lsbDiffBuffer: lsbDiff.data.buffer,
+                        pixelBuffer1,
+                        pixelBuffer2,
+                        width,
+                        height
+                    }
+                },
+                [ampDiff.data.buffer, lsbDiff.data.buffer, pixelBuffer1, pixelBuffer2]
+            );
+
+        } else if (action === 'ANALYZE_TEXT') {
+            // data: { text }
+            const { text } = data;
+            sendProgress(id, 50, "Görünmez karakterler ve Unicode Tag'leri taranıyor...");
+            const analysis = ZeroWidthDetector.analyze(text);
+
+            self.postMessage({
+                type: 'SUCCESS',
+                id,
+                result: { analysis }
+            });
 
         } else {
             throw new Error(`Bilinmeyen iş parçacığı eylemi: ${action}`);

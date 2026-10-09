@@ -142,3 +142,36 @@ test('StegoWorkerClient - Steganalysis and Bit Plane extraction via client', asy
     assert.equal(bitPlane.height, height);
     assert.equal(bitPlane.data.length, width * height * 4);
 });
+
+test('StegoWorkerClient - inspectBinary, compareImages, and analyzeText via client', async () => {
+    // 1. inspectBinary via client
+    const width = 16;
+    const height = 16;
+    const pixelBuffer = new Uint8ClampedArray(width * height * 4).fill(128);
+    const pngBytes = await PngCodec.encode({ width, height, data: pixelBuffer });
+
+    const binaryReport = await StegoWorkerClient.inspectBinary({ fileBuffer: pngBytes.buffer });
+    assert.equal(binaryReport.format, 'png');
+    assert.equal(binaryReport.verdictLevel, 'clean');
+    assert.ok(binaryReport.chunks.length >= 3);
+
+    // 2. compareImages via client
+    const pixelBuffer2 = new Uint8ClampedArray(pixelBuffer);
+    pixelBuffer2[0] = 130; // slight difference
+    const compResult = await StegoWorkerClient.compareImages({
+        pixelBuffer1: pixelBuffer.buffer,
+        pixelBuffer2: pixelBuffer2.buffer,
+        width,
+        height,
+        amplifier: 20
+    });
+    assert.equal(compResult.comparison.changedPixels, 1);
+    assert.ok(compResult.ampDiffData.length > 0);
+    assert.ok(compResult.lsbDiffData.length > 0);
+
+    // 3. analyzeText via client
+    const textAnalysis = await StegoWorkerClient.analyzeText({ text: "Test\u200BText" });
+    assert.equal(textAnalysis.totalInvisible, 1);
+    assert.equal(textAnalysis.hasZeroWidth, true);
+    assert.equal(textAnalysis.cleanedText, "TestText");
+});

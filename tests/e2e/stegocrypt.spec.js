@@ -401,5 +401,146 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
         await expect(outputArea).toBeVisible();
         await expect(outputArea).toHaveValue(secretText);
     });
+
+    test('11. Phase 5 - Binary Inspector & Trailing Overlay (ZIP Injection) Detection', async ({ page }) => {
+        await page.goto('/');
+
+        // Create a PNG fixture with trailing ZIP overlay injected
+        const cleanPng = fs.readFileSync(path.join(fixturesDir, 'opaque_carrier.png'));
+        const zipHeader = Buffer.from([0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x08, 0x00]);
+        const fakeZipPayload = Buffer.concat([zipHeader, Buffer.from("SECRET_FORENSIC_ZIP_PAYLOAD_TEST")]);
+        const injectedPng = Buffer.concat([cleanPng, fakeZipPayload]);
+        const tmpInjectedPath = path.join(fixturesDir, 'temp_injected_overlay.png');
+        fs.writeFileSync(tmpInjectedPath, injectedPng);
+
+        try {
+            // Switch to Inspect Tab and Binary Subtab
+            await page.locator('#btn-tab-inspect').click();
+            await page.locator('#btn-subtab-binary').click();
+
+            // Upload the injected PNG
+            await page.locator('#file-binary').setInputFiles(tmpInjectedPath);
+
+            // Verify Results Card is displayed
+            await expect(page.locator('#container-binary-results')).toBeVisible();
+            await expect(page.locator('#binary-format-badge')).toHaveText('PNG');
+
+            // Verify Overlay Alert is displayed and detects ZIP signature
+            await expect(page.locator('#binary-overlay-card')).toBeVisible();
+            await expect(page.locator('#binary-overlay-details')).toContainText(/ZIP Arşivi/i);
+            await expect(page.locator('#binary-overlay-hex')).toContainText(/50 4B 03 04/i);
+
+            // Verify Chunks Table has parsed chunks (IHDR, IDAT, IEND)
+            const rows = page.locator('#tbody-binary-chunks tr');
+            await expect(rows.first()).toBeVisible();
+            await expect(page.locator('#tbody-binary-chunks')).toContainText('IHDR');
+            await expect(page.locator('#tbody-binary-chunks')).toContainText('IEND');
+
+            // Verify trailing payload download button works
+            const downloadPromise = page.waitForEvent('download');
+            await page.locator('#btn-download-overlay').click();
+            const download = await downloadPromise;
+            const downloadedPath = await download.path();
+            const downloadedBytes = fs.readFileSync(downloadedPath);
+            expect(downloadedBytes.length).toBe(fakeZipPayload.length);
+            expect(downloadedBytes[0]).toBe(0x50);
+            expect(downloadedBytes[1]).toBe(0x4B);
+        } finally {
+            if (fs.existsSync(tmpInjectedPath)) fs.unlinkSync(tmpInjectedPath);
+        }
+    });
+
+    test('12. Phase 5 - Diff Engine & Visual Fidelity Metrics (PSNR / SSIM / LSB Map)', async ({ page }) => {
+        await page.goto('/');
+
+        // 1. Embed a message to produce a valid stego image
+        const carrierPath = path.join(fixturesDir, 'opaque_carrier.png');
+        await page.locator('#file-hide').setInputFiles(carrierPath);
+
+        const secretText = 'Diff Engine Sadakat ve Kalite Testi #2026';
+        const password = 'DiffTestPassword!2026';
+        await page.locator('#text-hide').fill(secretText);
+        await page.locator('#pass-hide').fill(password);
+
+        await page.locator('#btn-encrypt').click();
+        const btnShare = page.locator('#btn-share');
+        await expect(btnShare).toBeVisible();
+
+        const downloadPromise = page.waitForEvent('download');
+        await btnShare.click();
+        const download = await downloadPromise;
+        const stegoDownloadPath = await download.path();
+
+        // 2. Switch to Inspect Tab and Diff Subtab
+        await page.locator('#btn-tab-inspect').click();
+        await page.locator('#btn-subtab-diff').click();
+
+        // Upload Cover and Stego images
+        await page.locator('#file-diff-cover').setInputFiles(carrierPath);
+        await page.locator('#file-diff-stego').setInputFiles(stegoDownloadPath);
+
+        // Wait for asynchronous image decoding to complete in browser
+        await expect(page.locator('#label-diff-cover')).toContainText(/Cover \(\d+x\d+\)/);
+        await expect(page.locator('#label-diff-stego')).toContainText(/Stego \(\d+x\d+\)/);
+
+        // Click Run Diff button
+        await page.locator('#btn-run-diff').click();
+
+        // Verify Results Container and Quantitative Badges
+        await expect(page.locator('#container-diff-results')).toBeVisible();
+
+        const psnrText = await page.locator('#diff-psnr-val').innerText();
+        expect(psnrText).toMatch(/dB/i);
+
+        const ssimText = await page.locator('#diff-ssim-val').innerText();
+        const ssimVal = parseFloat(ssimText);
+        expect(ssimVal).toBeGreaterThan(0.95); // High structural fidelity
+
+        // Verify Canvas is rendered
+        const canvas = page.locator('#canvas-diff');
+        await expect(canvas).toBeVisible();
+
+        // Toggle LSB mode
+        await page.locator('#diff-mode-lsb').check();
+        await expect(page.locator('#container-diff-slider')).toBeHidden();
+        await expect(canvas).toBeVisible();
+    });
+
+    test('13. Phase 5 - Zero-Width & Unicode Plane 14 ASCII Smuggling Detector', async ({ page }) => {
+        await page.goto('/');
+
+        // Switch to Inspect Tab and Zero-Width Subtab
+        await page.locator('#btn-tab-inspect').click();
+        await page.locator('#btn-subtab-zerowidth').click();
+
+        // Text with:
+        // 1. Visible cover text: "Prompt: Summarize this text."
+        // 2. ZWSP characters: \u200B\u200C
+        // 3. BiDi Trojan RLO: \u202E
+        // 4. Unicode Plane 14 Tags encoding "SECRET":
+        //    'S': \u{E0053}, 'E': \u{E0045}, 'C': \u{E0043}, 'R': \u{E0052}, 'E': \u{E0045}, 'T': \u{E0054}
+        const smuggledTags = '\u{E0053}\u{E0045}\u{E0043}\u{E0052}\u{E0045}\u{E0054}';
+        const suspiciousText = `Prompt: Summarize this text.\u200B\u200C\u202E${smuggledTags}`;
+
+        await page.locator('#text-zerowidth-input').fill(suspiciousText);
+        await page.locator('#btn-analyze-zerowidth').click();
+
+        // Verify Results Container
+        await expect(page.locator('#container-zerowidth-results')).toBeVisible();
+
+        // Verify Verdict Banner
+        await expect(page.locator('#zerowidth-verdict-banner')).toContainText(/Gizli Karakter Tespit Edildi/i);
+
+        // Verify ASCII Smuggling Decoded Payload
+        await expect(page.locator('#container-smuggled-ascii')).toBeVisible();
+        await expect(page.locator('#text-smuggled-payload')).toHaveValue('SECRET');
+
+        // Verify BiDi Warning
+        await expect(page.locator('#container-bidi-warning')).toBeVisible();
+
+        // Verify Cleaned Text output
+        await expect(page.locator('#text-zerowidth-clean')).toHaveValue('Prompt: Summarize this text.');
+    });
 });
+
 
