@@ -47,20 +47,25 @@ flowchart LR
     end
 ```
 
-### 1. Kimlik Doğrulamalı Simetrik Kriptografi (AES-256-GCM)
+### 1. Kimlik Doğrulamalı Simetrik Kriptografi (AES-256-GCM & Format v3)
 * **AES-256-GCM:** Kimlik doğrulamalı şifreleme (AEAD) ile hem gizlilik hem de bütünlük/özgünlük doğrulaması sağlanır.
-* **Standart KDF Parametreleri:** Web Crypto API yerel PBKDF2-HMAC-SHA256 anahtar türetimi.
-* **Taze Entropi:** Her şifrelemede `crypto.getRandomValues` ile 16 baytlık kriptografik rastgele **Salt** ve 12 baytlık **IV** üretilir.
-* **Sıfır İmza (Zero-Signature):** Dosyada açık metin sihirli bayt (`magic string`) bulunmaz. 64 baytlık başlık (Salt + IV Meta + Şifreli Meta + IV Body) tekdüze sözde-rastgele bayt dizisi görünümündedir ($H \approx 8.0$ bit/bayt).
-* **Erken Doğrulama:** 24 baytlık şifreli metadata bloğu AES-GCM kimlik doğrulama etiketiyle kilitlidir. Yanlış parola girildiğinde gövde verisi işlenmeden anında hata üretilerek DoS ve bellek tükenmesi (OOM) önlenir.
+* **Format v3 KDF & HKDF Mimarisi:** OWASP standartlarına uygun **600.000 iterasyonlu** tekil PBKDF2-HMAC-SHA256 ana anahtarı. Katmanlar ve afin permütasyon tohumları `HKDF-Expand` (`v3/all`, `v3/even`, `v3/odd`) ile $<0.1$ ms sürede genişletilir.
+* **Taze Entropi & Ortak Salt:** Her şifrelemede `crypto.getRandomValues` ile 16 baytlık kriptografik rastgele **Salt** ve 12 baytlık **IV** üretilir. Çift katmanlı inkâr modunda tek bir ortak salt paylaşılarak çoklu-salt anomalisi önlenir.
+* **Sıfır İmza (Zero-Signature):** Dosyada açık metin sihirli bayt (`magic string`) bulunmaz. Başlık ve gövde tekdüze sözde-rastgele bayt dizisi görünümündedir ($H \approx 8.0$ bit/bayt).
+* **Erken Doğrulama:** Şifreli metadata bloğu AES-GCM kimlik doğrulama etiketiyle kilitlidir. Yanlış parola girildiğinde gövde verisi işlenmeden anında hata üretilerek DoS ve bellek tükenmesi (OOM) önlenir.
+* **Geriye Dönük Uyumluluk:** Otomatik çözücü (`extractAuto`), Format v3 paketlerini, Format v2 (ZeroSig 100k) ve Format v1 (Sıralı) legacy paketlerini şeffaf biçimde tanır.
 
-### 2. İstatiksel İnceleme Direnci & LSB Dağıtımı
-* **PRNG Afin Saçılım:** Veri piksellerin başından itibaren sıralı gömülmez; tohumdan türetilen aralarında asal adımlarla ($O(1)$ bellek tüketimi) görselin tüm RGB kanallarına homojen dağıtılır.
+### 2. Yüksek Performanslı Web Worker & Saf PngCodec Mimarisi
+* **Dedicated Web Worker Pipeline:** Ağır kriptografi (600.000 KDF), afin saçılım ve piksel işleme ana iş parçacığından (`UI thread`) tamamen izole arka plan Web Worker'ına (`workers/stego.worker.js`) devredilir. Arayüz daima 60 FPS akıcı kalır.
+* **Sıfır-Kopyalama (Transferable Objects):** Görsel piksel tamponları (`ArrayBuffer`), bellek kopyalama maliyeti olmaksızın ($O(0)$ transfer) ana iş parçacığı ile Worker arasında aktarılır.
+* **Saf JavaScript PNG Codec (`PngCodec`):** HTML5 `<canvas>` elemanının premultiplied alpha, sRGB renk uzayı yuvarlamaları veya tarayıcı farbling (parmak izi bozma) etkilerini baypas etmek için RFC 1950/1951 saf JavaScript PNG kodlayıcı ve çözücü geliştirilmiştir. Dışa aktarılan stego PNG dosyaları bit-exact kesinliktedir.
+
+### 3. İstatiksel İnceleme Direnci & LSB Dağıtımı
+* **PRNG Afin Saçılım:** Veri piksellerin başından itibaren sıralı gömülmez; HKDF tohumundan türetilen aralarında asal adımlarla ($O(1)$ bellek tüketimi) görselin tüm RGB kanallarına homojen dağıtılır.
 * **1-LSB & 2-LSB Seçimi:** Yüksek istatistiksel direnç için 1-LSB; yüksek taşıma kapasitesi için 2-LSB modu.
-* **Kayıpsız PNG & Canvas Alfa Düzleştirme:** Şeffaf PNG taşıyıcılarda premultiplied alpha kaynaklı RGB bozulmasını önlemek için alfa kanalı opaklaştırılır ve $\alpha = 255$ sabitlenir.
 * **Canvas Farbling Öz-Testi:** Açılışta test deseni çizilerek Brave Shields, Firefox RFP veya gizlilik eklentilerinin canvas verilerine gürültü ekleyip eklemediği denetlenir.
 
-### 3. Deneysel / Yüksek Riskli İnkâr Modu (Plausible Deniability)
+### 4. Deneysel / Yüksek Riskli İnkâr Modu (Plausible Deniability)
 * Tek bir görsel içerisine iki bağımsız şifreli katman gömülür:
   * **Tuzak Katman (Decoy):** Baskı/zorlama anında teslim edilebilecek zararsız kılıf veri (`even` kanalları).
   * **Gerçek Katman (Real):** Asıl gizli veri (`odd` kanalları).
@@ -71,7 +76,7 @@ flowchart LR
   > 3. Tek kanallar yapay gürültüyle doldurulursa, taşıyıcının tamamı manipüle edilmiş olacağından $\chi^2$ veya RS testleri gömmeyi doğrudan tespit edebilir.
   > Ayrıntılı analiz için [THREAT_MODEL.md](docs/THREAT_MODEL.md) belgesini inceleyin.
 
-### 4. Bellek Sıfırlama Gerçekliği (Best-Effort Zeroization)
+### 5. Bellek Sıfırlama Gerçekliği (Best-Effort Zeroization)
 * Kriptografik ve piksel tamponları işlem tamamlandığında `Uint8Array.fill(0)` ile sıfırlanır.
 * Ancak JavaScript çalışma zamanında (V8 / SpiderMonkey) HTML form alanlarından okunan parola string'leri heap bellekte immutable (değiştirilemez) nesneler olarak yaşar ve Garbage Collector (GC) temizleyene kadar RAM dökümünde kalabilir. İddia **"Best-Effort Memory Zeroization"** düzeyindedir.
 
@@ -101,7 +106,7 @@ Proje, hem Node.js yerel test ortamında birim testleriyle hem de Playwright ile
 # Bağımlılıkları yükleyin
 npm install
 
-# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth)
+# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient)
 npm run test:unit
 
 # 2. Tarayıcı Uçtan Uca (E2E) Testleri (Playwright + Chromium)
@@ -109,8 +114,8 @@ npm run test:e2e
 ```
 
 **Mevcut Test Durumu:**
-- **21 / 21** Birim Testi Başarılı (`node:test`, 560 ms)
-- **8 / 8** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF entegrasyonu)
+- **32 / 32** Birim Testi Başarılı (`node:test`, 670 ms)
+- **9 / 9** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline ve PngCodec Bit-Exact testi)
 
 ---
 

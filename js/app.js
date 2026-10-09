@@ -15,6 +15,8 @@ import { CompressionEngine } from './CompressionEngine.js';
 import { ScatterEngine } from './ScatterEngine.js';
 import { SteganalysisEngine } from './SteganalysisEngine.js';
 import { QREngine } from './QREngine.js';
+import { StegoWorkerClient } from './StegoWorkerClient.js';
+import { PngCodec } from './png/PngCodec.js';
 
 // ---------- Durum Değişkenleri ----------
 let currentHideCanvasData = null;
@@ -452,7 +454,7 @@ btnEncrypt.addEventListener('click', async () => {
             payload.fill(0);
 
         } else if (deniableActive) {
-            // İnkâr Edilebilir Çift Katmanlı Mod (Tuzak: Even, Gerçek: Odd)
+            // İnkâr Edilebilir Çift Katmanlı Mod (Tuzak: Even, Gerçek: Odd, Format v3)
             if (!currentHideCanvasData) throw new Error("Lütfen taşıyıcı görsel seçin.");
 
             const passDecoy = passDecoyInput.value;
@@ -464,49 +466,57 @@ btnEncrypt.addEventListener('click', async () => {
             rawDecoy[0] = 0x10; // Compressed text
             rawDecoy.set(compDecoy, 1);
 
-            const { header: hDecoy, cipherBody: cbDecoy } = await CryptoEngine.encryptZeroSig(rawDecoy, passDecoy, lsbMode);
-            await StegoEngine.embedScattered(currentHideCanvasData.imageData, hDecoy, cbDecoy, lsbMode, passDecoy, 'even');
+            showStatus("Format v3 çift katman şifreleniyor (600.000 PBKDF2)...");
+            const result = await StegoWorkerClient.encryptV3({
+                pixelBuffer: currentHideCanvasData.imageData.data.buffer,
+                width: currentHideCanvasData.imageData.width,
+                height: currentHideCanvasData.imageData.height,
+                rawBuffer: rawBufferToEncrypt,
+                pass,
+                lsbMode,
+                isDeniable: true,
+                rawDecoy,
+                passDecoy,
+                onProgress: (percent, text) => showStatus(text)
+            });
 
-            showStatus("2. Katman (Gerçek İçerik) hazırlanıyor...");
-            const { header: hReal, cipherBody: cbReal } = await CryptoEngine.encryptZeroSig(rawBufferToEncrypt, pass, lsbMode);
-            await StegoEngine.embedScattered(currentHideCanvasData.imageData, hReal, cbReal, lsbMode, pass, 'odd');
+            generatedBlob = new Blob([result.pngBytes], { type: 'image/png' });
+            const updatedData = new ImageData(new Uint8ClampedArray(result.pixelBuffer), result.width, result.height);
+            currentHideCanvasData.ctx.putImageData(updatedData, 0, 0);
+            currentHideCanvasData.imageData = updatedData;
 
-            currentHideCanvasData.ctx.putImageData(currentHideCanvasData.imageData, 0, 0);
+            const sizeKB = Math.floor(generatedBlob.size / 1024);
+            showStatus(`✅ İŞLEM BAŞARILI! İnkâr edilebilir çift katmanlı görsel hazır (${sizeKB} KB, Tuzak & Gerçek Katman, Format v3).`);
+            btnShare.style.display = 'flex';
 
-            currentHideCanvasData.canvas.toBlob((blob) => {
-                generatedBlob = blob;
-                const sizeKB = Math.floor(blob.size / 1024);
-                showStatus(`✅ İŞLEM BAŞARILI! İnkâr edilebilir çift katmanlı görsel hazır (${sizeKB} KB, Tuzak & Gerçek Katman).`);
-                btnShare.style.display = 'flex';
-            }, 'image/png');
-
-            hDecoy.fill(0);
-            cbDecoy.fill(0);
-            hReal.fill(0);
-            cbReal.fill(0);
             passDecoyInput.value = '';
             textDecoyInput.value = '';
 
         } else if (useScatter) {
-            // Dağınık PRNG Tek Katman Modu (Sıfır İmza)
+            // Dağınık PRNG Tek Katman Modu (Format v3, 600.000 PBKDF2)
             if (!currentHideCanvasData) throw new Error("Lütfen taşıyıcı görsel seçin.");
 
-            showStatus("Sıfır İmza paketi şifreleniyor (AES-256-GCM)...");
-            const { header, cipherBody } = await CryptoEngine.encryptZeroSig(rawBufferToEncrypt, pass, lsbMode);
+            showStatus("Format v3 şifreleniyor (600.000 PBKDF2, AES-256-GCM)...");
+            const result = await StegoWorkerClient.encryptV3({
+                pixelBuffer: currentHideCanvasData.imageData.data.buffer,
+                width: currentHideCanvasData.imageData.width,
+                height: currentHideCanvasData.imageData.height,
+                rawBuffer: rawBufferToEncrypt,
+                pass,
+                lsbMode,
+                isDeniable: false,
+                onProgress: (percent, text) => showStatus(text)
+            });
 
-            showStatus(`Piksellere homojen dağıtılıyor (PRNG, ${lsbMode}-LSB)...`);
-            await StegoEngine.embedScattered(currentHideCanvasData.imageData, header, cipherBody, lsbMode, pass, 'all');
-            currentHideCanvasData.ctx.putImageData(currentHideCanvasData.imageData, 0, 0);
+            generatedBlob = new Blob([result.pngBytes], { type: 'image/png' });
+            const updatedData = new ImageData(new Uint8ClampedArray(result.pixelBuffer), result.width, result.height);
+            currentHideCanvasData.ctx.putImageData(updatedData, 0, 0);
+            currentHideCanvasData.imageData = updatedData;
 
-            currentHideCanvasData.canvas.toBlob((blob) => {
-                generatedBlob = blob;
-                const sizeKB = Math.floor(blob.size / 1024);
-                showStatus(`✅ İŞLEM BAŞARILI! Şifreli görsel hazır (${sizeKB} KB, Dağınık ${lsbMode}-LSB, Sıfır İmza).`);
-                btnShare.style.display = 'flex';
-            }, 'image/png');
+            const sizeKB = Math.floor(generatedBlob.size / 1024);
+            showStatus(`✅ İŞLEM BAŞARILI! Şifreli görsel hazır (${sizeKB} KB, Dağınık ${lsbMode}-LSB, Format v3).`);
+            btnShare.style.display = 'flex';
 
-            header.fill(0);
-            cipherBody.fill(0);
         } else {
             // Sıralı Mod (Klasik)
             if (!currentHideCanvasData) throw new Error("Lütfen taşıyıcı görsel seçin.");
@@ -516,12 +526,16 @@ btnEncrypt.addEventListener('click', async () => {
             StegoEngine.embedSequential(currentHideCanvasData.imageData, payload, lsbMode);
             currentHideCanvasData.ctx.putImageData(currentHideCanvasData.imageData, 0, 0);
 
-            currentHideCanvasData.canvas.toBlob((blob) => {
-                generatedBlob = blob;
-                const sizeKB = Math.floor(blob.size / 1024);
-                showStatus(`✅ İŞLEM BAŞARILI! Şifreli görsel hazır (${sizeKB} KB, Sıralı ${lsbMode}-LSB).`);
-                btnShare.style.display = 'flex';
-            }, 'image/png');
+            // Saf deterministik PNG ile dışa aktar
+            const pngBytes = await PngCodec.encode({
+                width: currentHideCanvasData.imageData.width,
+                height: currentHideCanvasData.imageData.height,
+                data: currentHideCanvasData.imageData.data
+            });
+            generatedBlob = new Blob([pngBytes], { type: 'image/png' });
+            const sizeKB = Math.floor(generatedBlob.size / 1024);
+            showStatus(`✅ İŞLEM BAŞARILI! Şifreli görsel hazır (${sizeKB} KB, Sıralı ${lsbMode}-LSB).`);
+            btnShare.style.display = 'flex';
 
             payload.fill(0);
         }
@@ -562,11 +576,38 @@ async function processRevealFile(file) {
 
     try {
         showStatus("Görsel işleniyor...");
+        setPreviewImage(previewReveal, file);
+
+        // Eğer PNG dosyası ise, tarayıcı canvas farbling/alfa bozulmasını önlemek için doğrudan PngCodec ile ayrıştır
+        const isPng = file.type === 'image/png' || (file.name && /\.png$/i.test(file.name));
+        if (isPng) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const decoded = await StegoWorkerClient.decodePng(arrayBuffer);
+                const canvas = document.createElement("canvas");
+                canvas.width = decoded.width;
+                canvas.height = decoded.height;
+                const ctx = canvas.getContext("2d", { willReadFrequently: true, colorSpace: "srgb" });
+                const imgData = ctx.createImageData(decoded.width, decoded.height);
+                imgData.data.set(decoded.data);
+                ctx.putImageData(imgData, 0, 0);
+
+                currentRevealCanvasData = {
+                    canvas,
+                    ctx,
+                    imageData: imgData,
+                    rawCodec: true
+                };
+                hideStatus();
+                return;
+            } catch (codecErr) {
+                console.warn("PngCodec ayrıştırma hatası, varsayılan Image yükleyicisine geçiliyor:", codecErr);
+            }
+        }
+
         const img = await ImageEngine.loadImage(file, (msg) => showStatus(msg));
         const maxDim = Math.max(img.width, img.height);
         currentRevealCanvasData = ImageEngine.processToCanvas(img, maxDim);
-
-        setPreviewImage(previewReveal, file);
 
         if (file.type === 'image/jpeg' || (file.name && /\.(jpe?g)$/i.test(file.name))) {
             showStatus("⚠️ Uyarı: Seçilen görsel JPEG formatında. JPEG sıkıştırması görsel piksellerini bozduğu için LSB şifresi çözülemeyebilir. Lütfen şifreli orijinal PNG görselini seçtiğinizden emin olun.", true);
@@ -602,8 +643,14 @@ btnDecrypt.addEventListener('click', async () => {
 
         if (isImageReveal) {
             if (!currentRevealCanvasData) throw new Error("Lütfen şifreli PNG seçin.");
-            showStatus("Pikseller ve katmanlar taranıyor...");
-            decryptedBytes = await StegoEngine.extractAuto(currentRevealCanvasData.imageData, pass);
+            showStatus("Pikseller ve katmanlar taranıyor (Format v3/v2/v1)...");
+            decryptedBytes = await StegoWorkerClient.decryptAuto({
+                pixelBuffer: currentRevealCanvasData.imageData.data.buffer,
+                width: currentRevealCanvasData.imageData.width,
+                height: currentRevealCanvasData.imageData.height,
+                password: pass,
+                onProgress: (percent, text) => showStatus(text)
+            });
         } else {
             const pastedText = inputRevealTextInput.value;
             if (!pastedText) throw new Error("Lütfen şifreli metni yapıştırın.");
@@ -785,29 +832,60 @@ function getSelectedInspectChannel() {
     return 'all';
 }
 
-function updateInspectBitPlane() {
+async function updateInspectBitPlane() {
     if (!currentInspectImageData || !canvasInspect) return;
     const channel = getSelectedInspectChannel();
-    const bitPlane = SteganalysisEngine.renderBitPlane(currentInspectImageData, channel, 1);
+    const bitPlane = await StegoWorkerClient.renderBitPlane({
+        pixelBuffer: currentInspectImageData.data.buffer,
+        width: currentInspectImageData.width,
+        height: currentInspectImageData.height,
+        channel,
+        bitDepth: 1
+    });
     canvasInspect.width = bitPlane.width;
     canvasInspect.height = bitPlane.height;
     const ctx = canvasInspect.getContext('2d');
-    ctx.putImageData(bitPlane, 0, 0);
+    const imgData = ctx.createImageData(bitPlane.width, bitPlane.height);
+    imgData.data.set(bitPlane.data);
+    ctx.putImageData(imgData, 0, 0);
 }
 
 async function processInspectFile(file) {
     if (!file) return;
     try {
         showStatus("Görsel taranıyor ve steganaliz yapılıyor...");
-        const img = await ImageEngine.loadImage(file, (msg) => showStatus(msg));
-        const { imageData } = ImageEngine.processToCanvas(img, 1920);
-        currentInspectImageData = imageData;
+        let imgData = null;
+        const isPng = file.type === 'image/png' || (file.name && /\.png$/i.test(file.name));
+        if (isPng) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const decoded = await StegoWorkerClient.decodePng(arrayBuffer);
+                imgData = {
+                    width: decoded.width,
+                    height: decoded.height,
+                    data: decoded.data
+                };
+            } catch (codecErr) {
+                console.warn("PngCodec ayrıştırma hatası, Image nesnesine geçiliyor:", codecErr);
+            }
+        }
+        if (!imgData) {
+            const img = await ImageEngine.loadImage(file, (msg) => showStatus(msg));
+            const { imageData } = ImageEngine.processToCanvas(img, 1920);
+            imgData = imageData;
+        }
+        currentInspectImageData = imgData;
 
         // 1. Bit Düzlemi çiz
-        updateInspectBitPlane();
+        await updateInspectBitPlane();
 
         // 2. Chi-Square testi
-        const result = SteganalysisEngine.analyzeChiSquare(currentInspectImageData);
+        const result = await StegoWorkerClient.analyzeChiSquare({
+            pixelBuffer: currentInspectImageData.data.buffer,
+            width: currentInspectImageData.width,
+            height: currentInspectImageData.height,
+            onProgress: (percent, msg) => showStatus(msg)
+        });
         inspectProbBadge.innerText = `%${result.probability}`;
         if (result.probability >= 75) {
             inspectProbBadge.style.color = 'var(--md-error)';

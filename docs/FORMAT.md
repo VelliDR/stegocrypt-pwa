@@ -56,7 +56,7 @@ Parametreler PBKDF2 üzerinden türetilir:
 
 ## 3. Format v3: Tek KDF & HKDF Çoklu Katman (Faz 2 Spesifikasyonu)
 
-Format v3'te her katman için ayrı PBKDF2 (600.000 iterasyon) çalıştırma maliyetini ortadan kaldırmak için tekil ana KDF ve etiketli HKDF alt-anahtar türetimi kullanılır:
+Format v3'te her katman için ayrı PBKDF2 çalıştırma maliyeti tamamen ortadan kaldırılmıştır. 16 baytlık genel tuz (public salt) görselin ilk 128 kanalına yerleştirilir; ardından tek bir 600.000 iterasyonlu PBKDF2-HMAC-SHA256 ana KDF çalıştırılarak HKDF (`HMAC-SHA-256`) ile alt-anahtarlar anında türetilir:
 
 ```mermaid
 flowchart TD
@@ -64,10 +64,20 @@ flowchart TD
     B --> C["HKDF-Expand(Master, 'v3/all')"]
     B --> D["HKDF-Expand(Master, 'v3/even')"]
     B --> E["HKDF-Expand(Master, 'v3/odd')"]
-    C --> C1["{scatterKey, metaKey, bodyKey}"]
-    D --> D1["{scatterKey, metaKey, bodyKey}"]
-    E --> E1["{scatterKey, metaKey, bodyKey}"]
+    C --> C1["{scatterBits: 8B, metaKey: 32B, bodyKey: 32B}"]
+    D --> D1["{scatterBits: 8B, metaKey: 32B, bodyKey: 32B}"]
+    E --> E1["{scatterBits: 8B, metaKey: 32B, bodyKey: 32B}"]
 ```
+
+### 3.1 Paket Mimarisi
+
+1. **Ortak Salt Bloğu (16 Bayt = 128 Kanal):** Taşıyıcının ilk 128 RGB kanalına 1-LSB ile yazılır. Çift katmanlı inkâr modunda dahi tek bir ortak salt paylaşılır; bu sayede adli analizci çift salt anomalisi yakalayamaz.
+2. **Dağınık Başlık Bloğu (48 Bayt = 384 Kanal):** HKDF `scatterBits` tohumundan türetilen afin permütasyon indislerine 1-LSB ile dağıtılır:
+   - `0..11` (12 B): `IV Meta`
+   - `12..35` (24 B): `Encrypted Meta` (8 B açık veri: `[0x53, 0x47, lsbMode, 0x00, CipherBodyLen]` + 16 B AES-GCM Auth Tag)
+   - `36..47` (12 B): `IV Body`
+3. **Şifreli Gövde:** `lsbMode` (1-LSB veya 2-LSB) ile seçilen afin permütasyon indislerine gömülür.
+4. **Pure JS PNG Codec (`PngCodec`):** Üretilen piksel matrisi doğrudan RFC 1950/1951 saf JavaScript PNG kodlayıcısıyla dosya haline getirilir; HTML5 Canvas'ın renk profili ve alfa yuvarlama tahrifatları sıfırlanır.
 
 ---
 

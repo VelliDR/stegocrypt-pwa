@@ -184,17 +184,226 @@ export const StegoEngine = {
         return payload;
     },
 
+    // =========================================================================
+    // FORMAT v3: Public Salt + HKDF Çoklu Katman Motoru (600.000 KDF)
+    // =========================================================================
+
+    writeSaltV3(data, salt) {
+        for (let b = 0; b < 16; b++) {
+            for (let bit = 7; bit >= 0; bit--) {
+                const ch = b * 8 + (7 - bit);
+                const pixelIdx = Math.floor(ch / 3);
+                const rawIdx = pixelIdx * 4 + (ch % 3);
+                const bitVal = (salt[b] >> bit) & 1;
+                data[rawIdx] = (data[rawIdx] & 0xFE) | bitVal;
+            }
+        }
+    },
+
+    readSaltV3(data) {
+        const salt = new Uint8Array(16);
+        for (let b = 0; b < 16; b++) {
+            let byteVal = 0;
+            for (let bit = 7; bit >= 0; bit--) {
+                const ch = b * 8 + (7 - bit);
+                const pixelIdx = Math.floor(ch / 3);
+                const rawIdx = pixelIdx * 4 + (ch % 3);
+                byteVal = (byteVal << 1) | (data[rawIdx] & 1);
+            }
+            salt[b] = byteVal;
+        }
+        return salt;
+    },
+
+    /**
+     * Format v3 Dağınık Gömme (Public Salt + HKDF)
+     * @param {ImageData} imageData
+     * @param {Uint8Array} header48
+     * @param {Uint8Array} cipherBody
+     * @param {number} lsbMode
+     * @param {ArrayBuffer} scatterBits
+     * @param {Uint8Array} [salt] - 16 bayt genel tuz
+     * @param {'all'|'even'|'odd'} [partition='all']
+     * @returns {ImageData}
+     */
+    embedV3(imageData, header48, cipherBody, lsbMode, scatterBits, salt, partition = 'all') {
+        const data = imageData.data;
+        const totalUsableChannels = Math.floor((data.length / 4) * 3);
+        const saltChannels = 128; // 16 bayt = 128 kanal
+
+        if (totalUsableChannels <= saltChannels + 48 * 8) {
+            throw new Error("Görsel veri gömmek için çok küçük.");
+        }
+
+        const payloadChannels = totalUsableChannels - saltChannels;
+        const { c0, step, nPartition } = ScatterEngine.deriveParamsFromBits(scatterBits, payloadChannels, partition);
+
+        const headerChannelsNeeded = 48 * 8; // 48 bayt = 384 kanal
+        const channelsPerBodyByte = lsbMode === 2 ? 4 : 8;
+        const bodyChannelsNeeded = cipherBody.length * channelsPerBodyByte;
+        const totalNeeded = headerChannelsNeeded + bodyChannelsNeeded;
+
+        if (totalNeeded > nPartition) {
+            throw new Error(`Veri boyutu görsel/katman kapasitesini aşıyor (${totalNeeded} kanal gerekli, ${nPartition} mevcut).`);
+        }
+
+        // 1. Genel Salt bloğunu yaz (eğer verilmişse)
+        if (salt) {
+            this.writeSaltV3(data, salt);
+        }
+
+        function getRawIndex(stepIdx) {
+            const pIdx = (c0 + stepIdx * step) % nPartition;
+            let payloadChannel = pIdx;
+            if (partition === 'even') {
+                payloadChannel = pIdx * 2;
+            } else if (partition === 'odd') {
+                payloadChannel = pIdx * 2 + 1;
+            }
+            const actualChannel = saltChannels + payloadChannel;
+            const pixelIndex = Math.floor(actualChannel / 3);
+            const colorOffset = actualChannel % 3;
+            return pixelIndex * 4 + colorOffset;
+        }
+
+        let stepIdx = 0;
+
+        // 2. 48 baytlık başlığı 1-LSB ile dağıt
+        for (let b = 0; b < 48; b++) {
+            for (let bit = 7; bit >= 0; bit--) {
+                const bitVal = (header48[b] >> bit) & 1;
+                const rawIdx = getRawIndex(stepIdx++);
+                data[rawIdx] = (data[rawIdx] & 0xFE) | bitVal;
+            }
+        }
+
+        // 3. Gövdeyi lsbMode ile dağıt
+        const mask = (1 << lsbMode) - 1;
+        for (let b = 0; b < cipherBody.length; b++) {
+            for (let bit = 8 - lsbMode; bit >= 0; bit -= lsbMode) {
+                const bitsVal = (cipherBody[b] >> bit) & mask;
+                const rawIdx = getRawIndex(stepIdx++);
+                data[rawIdx] = (data[rawIdx] & ~mask) | bitsVal;
+            }
+        }
+
+        return imageData;
+    },
+
+    /**
+     * Format v3 Dağınık Çıkarma (Master Key + HKDF)
+     * @param {ImageData} imageData
+     * @param {CryptoKey} masterKey
+     * @param {'all'|'even'|'odd'} [partition='all']
+     * @returns {Promise<Uint8Array>}
+     */
+    async extractV3(imageData, masterKey, partition = 'all') {
+        const data = imageData.data;
+        const totalUsableChannels = Math.floor((data.length / 4) * 3);
+        const saltChannels = 128;
+
+        if (totalUsableChannels <= saltChannels + 48 * 8) {
+            throw new Error("Görsel veri okumak için çok küçük.");
+        }
+
+        const payloadChannels = totalUsableChannels - saltChannels;
+        const label = `v3/${partition}`;
+        const { scatterBits, metaKey, bodyKey } = await CryptoEngine.deriveSubkeysV3(masterKey, label);
+        const { c0, step, nPartition } = ScatterEngine.deriveParamsFromBits(scatterBits, payloadChannels, partition);
+
+        function getRawIndex(stepIdx) {
+            const pIdx = (c0 + stepIdx * step) % nPartition;
+            let payloadChannel = pIdx;
+            if (partition === 'even') {
+                payloadChannel = pIdx * 2;
+            } else if (partition === 'odd') {
+                payloadChannel = pIdx * 2 + 1;
+            }
+            const actualChannel = saltChannels + payloadChannel;
+            const pixelIndex = Math.floor(actualChannel / 3);
+            const colorOffset = actualChannel % 3;
+            return pixelIndex * 4 + colorOffset;
+        }
+
+        // 1. 48 baytlık başlığı topla
+        const header48 = new Uint8Array(48);
+        let stepIdx = 0;
+        for (let b = 0; b < 48; b++) {
+            let byteVal = 0;
+            for (let bit = 7; bit >= 0; bit--) {
+                const rawIdx = getRawIndex(stepIdx++);
+                const bitVal = data[rawIdx] & 1;
+                byteVal = (byteVal << 1) | bitVal;
+            }
+            header48[b] = byteVal;
+        }
+
+        // 2. Başlığı doğrula (parola veya katman uyuşmazsa anında reddeder)
+        const { lsbMode, cipherLen, ivBody } = await CryptoEngine.decryptMetaV3(header48, metaKey);
+
+        const channelsPerBodyByte = lsbMode === 2 ? 4 : 8;
+        const neededBodyChannels = cipherLen * channelsPerBodyByte;
+        if (stepIdx + neededBodyChannels > nPartition) {
+            throw new Error("Görsel eksik veya kırpılmış.");
+        }
+
+        // 3. Gövdeyi topla
+        const cipherBody = new Uint8Array(cipherLen);
+        const mask = (1 << lsbMode) - 1;
+        for (let b = 0; b < cipherLen; b++) {
+            let byteVal = 0;
+            for (let bit = 8 - lsbMode; bit >= 0; bit -= lsbMode) {
+                const rawIdx = getRawIndex(stepIdx++);
+                const bitsVal = data[rawIdx] & mask;
+                byteVal = (byteVal << lsbMode) | bitsVal;
+            }
+            cipherBody[b] = byteVal;
+        }
+
+        // 4. Gövdeyi çöz
+        return await CryptoEngine.decryptBodyV3(cipherBody, bodyKey, ivBody);
+    },
+
     /**
      * Akıllı Otomatik Çözücü:
-     * 1. Sıralı mod başlığı kontrolü (STG1/STG2/STEG)
-     * 2. Dağınık Tekil Mod ('all')
-     * 3. İnkâr Edilebilir Tuzak Katman ('even')
-     * 4. İnkâr Edilebilir Gerçek Katman ('odd')
+     * 1. Format v3 (Tek PBKDF2 600k + HKDF 'v3/all' -> 'v3/even' -> 'v3/odd')
+     * 2. Format v2 Dağınık Sıfır İmza (100k, 'all' -> 'even' -> 'odd')
+     * 3. Format v1 Sıralı Mod (STG1/STG2/STEG)
      */
     async extractAuto(imageData, password) {
         const data = imageData.data;
+        const totalUsableChannels = Math.floor((data.length / 4) * 3);
 
-        // 1. Sıralı kontrol
+        // 1. ÖNCELİK: Format v3 (Tek 600k PBKDF2 + HKDF çoklu katman)
+        if (totalUsableChannels > 128 + 48 * 8) {
+            try {
+                const salt = this.readSaltV3(data);
+                const masterKey = await CryptoEngine.deriveMasterKeyV3(password, salt, 600000);
+
+                const v3Partitions = ['all', 'even', 'odd'];
+                for (const part of v3Partitions) {
+                    try {
+                        return await this.extractV3(imageData, masterKey, part);
+                    } catch {
+                        // Bu v3 katmanı değilse diğerini dene
+                    }
+                }
+            } catch {
+                // v3 başarısız olursa geriye uyumluluk katmanlarına geç
+            }
+        }
+
+        // 2. ÖNCELİK: Format v2 Sıfır İmza Dağınık Mod ('all' -> 'even' -> 'odd')
+        const candidatePartitions = ['all', 'even', 'odd'];
+        for (const part of candidatePartitions) {
+            try {
+                return await this.extractScattered(imageData, password, part);
+            } catch {
+                // Bu katman değilse sonrakini dene
+            }
+        }
+
+        // 3. ÖNCELİK: Format v1 Sıralı Kontrol (STG1/STG2/STEG)
         const reader = new BitReader(data);
         const first4 = reader.readBytes(4, 1);
         const magic = new TextDecoder().decode(first4);
@@ -205,16 +414,6 @@ export const StegoEngine = {
                 return await CryptoEngine.decryptBuffer(payload, password);
             } catch {
                 // Başarısızsa devam et
-            }
-        }
-
-        // 2. Dağınık mod katmanları: 'all' -> 'even' -> 'odd'
-        const candidatePartitions = ['all', 'even', 'odd'];
-        for (const part of candidatePartitions) {
-            try {
-                return await this.extractScattered(imageData, password, part);
-            } catch {
-                // Bu katman değilse sonrakini dene
             }
         }
 

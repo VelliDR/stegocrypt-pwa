@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stegocrypt-v6';
+const CACHE_NAME = 'stegocrypt-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,9 @@ const ASSETS = [
   './js/ImageEngine.js',
   './js/ZeroWidthEngine.js',
   './js/QREngine.js',
+  './js/StegoWorkerClient.js',
+  './js/png/PngCodec.js',
+  './workers/stego.worker.js',
   './js/vendor/qrcode.mjs',
   './js/vendor/jsQR.js',
   './js/vendor/heic2any.min.js'

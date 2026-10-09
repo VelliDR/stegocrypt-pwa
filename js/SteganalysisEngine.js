@@ -25,7 +25,9 @@ export const SteganalysisEngine = {
      */
     renderBitPlane(sourceImageData, channel = 'all', bitDepth = 1) {
         const src = sourceImageData.data;
-        const out = new ImageData(sourceImageData.width, sourceImageData.height);
+        const out = (typeof ImageData !== 'undefined')
+            ? new ImageData(sourceImageData.width, sourceImageData.height)
+            : { width: sourceImageData.width, height: sourceImageData.height, data: new Uint8ClampedArray(sourceImageData.width * sourceImageData.height * 4) };
         const dst = out.data;
         const mask = (1 << bitDepth) - 1;
 

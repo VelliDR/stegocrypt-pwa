@@ -25,7 +25,31 @@ function findCoprime(n, preferred) {
 
 export const ScatterEngine = {
     /**
-     * Parola, toplam kanal ve bölüm türünden (all/even/odd) parametreleri türetir.
+     * HKDF 64-bit tohumundan c0, step ve nPartition parametrelerini türetir (O(1) hesaplama).
+     * @param {ArrayBuffer|Uint8Array} bits64
+     * @param {number} totalUsableChannels
+     * @param {'all'|'even'|'odd'} [partition='all']
+     * @returns {{ c0: number, step: number, nPartition: number }}
+     */
+    deriveParamsFromBits(bits64, totalUsableChannels, partition = 'all') {
+        const view = new DataView(bits64 instanceof ArrayBuffer ? bits64 : bits64.buffer, bits64.byteOffset, 8);
+        const c0Raw = view.getUint32(0, false);
+        const stepRaw = view.getUint32(4, false);
+
+        let nPartition = totalUsableChannels;
+        if (partition === 'even') {
+            nPartition = Math.floor((totalUsableChannels + 1) / 2);
+        } else if (partition === 'odd') {
+            nPartition = Math.floor(totalUsableChannels / 2);
+        }
+
+        const c0 = c0Raw % nPartition;
+        const step = findCoprime(nPartition, stepRaw);
+        return { c0, step, nPartition };
+    },
+
+    /**
+     * Parola, toplam kanal ve bölüm türünden (all/even/odd) parametreleri türetir (Format v2 geriye uyumluluk).
      * @param {string} password
      * @param {number} totalUsableChannels
      * @param {'all'|'even'|'odd'} [partition='all']

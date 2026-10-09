@@ -243,4 +243,50 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
 
         await expect(page.locator('#text-reveal')).toHaveValue('Görünmez gizli bilgi');
     });
+
+    test('8. Phase 2 Web Worker & Format v3 PngCodec Bit-Exact Pipeline Verification', async ({ page }) => {
+        await page.goto('/');
+
+        // Verify Web Worker API is supported and active in browser
+        const hasWorker = await page.evaluate(() => typeof window.Worker !== 'undefined');
+        expect(hasWorker).toBe(true);
+
+        const carrierPath = path.join(fixturesDir, 'opaque_carrier.png');
+        await page.locator('#file-hide').setInputFiles(carrierPath);
+
+        const secretText = 'Faz 2 Web Worker 600k KDF & PngCodec Doğrulama Testi!';
+        const password = 'Phase2WorkerPassword#2026';
+
+        await page.locator('#text-hide').fill(secretText);
+        await page.locator('#pass-hide').fill(password);
+
+        // Click Hide
+        await page.locator('#btn-encrypt').click();
+
+        const btnShare = page.locator('#btn-share');
+        await expect(btnShare).toBeVisible();
+
+        const downloadPromise = page.waitForEvent('download');
+        await btnShare.click();
+        const download = await downloadPromise;
+        const downloadPath = await download.path();
+
+        // Verify PNG magic header and binary structure
+        const fileBytes = fs.readFileSync(downloadPath);
+        const pngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        for (let i = 0; i < 8; i++) {
+            expect(fileBytes[i]).toBe(pngMagic[i]);
+        }
+
+        // Reveal tab roundtrip
+        await page.locator('#btn-tab-reveal').click();
+        await page.locator('#file-reveal').setInputFiles(downloadPath);
+        await page.locator('#pass-reveal').fill(password);
+        await page.locator('#btn-decrypt').click();
+
+        const outputArea = page.locator('#text-reveal');
+        await expect(outputArea).toBeVisible();
+        await expect(outputArea).toHaveValue(secretText);
+    });
 });
+
