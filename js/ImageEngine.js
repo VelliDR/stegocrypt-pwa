@@ -118,9 +118,22 @@ export const ImageEngine = {
             willReadFrequently: true,
             colorSpace: "srgb"
         });
+
+        // 1. Opak arka plan doldur (şeffaf PNG taşıyıcılarda alfa bozulmasını önler)
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Görseli çiz
         ctx.drawImage(img, 0, 0, width, height);
 
         const imageData = ctx.getImageData(0, 0, width, height);
+        
+        // 3. Tüm alfa piksellerini 255'e sabitle (Premultiplied alpha kaynaklı LSB bozulmasını engeller)
+        const d = imageData.data;
+        for (let i = 3; i < d.length; i += 4) {
+            d[i] = 255;
+        }
+        ctx.putImageData(imageData, 0, 0);
         
         // Kapasite hesapları (1-LSB ve 2-LSB)
         const totalChannels = Math.floor((imageData.data.length / 4) * 3);
@@ -136,5 +149,44 @@ export const ImageEngine = {
             maxCapacityBytes1LSB, 
             maxCapacityBytes2LSB 
         };
+    },
+
+    /**
+     * Tarayıcının canvas çizimlerine parmak izi koruması (farbling/noise) ekleyip eklemediğini test eder.
+     * Brave Shields, Firefox RFP veya gizlilik eklentileri piksel okumalarına gürültü ekleyerek LSB'yi bozabilir.
+     * @returns {{ ok: boolean, farblingDetected: boolean, reason?: string }}
+     */
+    verifyCanvasIntegrity() {
+        if (typeof document === 'undefined') return { ok: true, farblingDetected: false };
+        try {
+            const canvas = document.createElement("canvas");
+            canvas.width = 8;
+            canvas.height = 8;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (!ctx) return { ok: false, farblingDetected: false, reason: "Canvas context alınamadı." };
+
+            const testData = ctx.createImageData(8, 8);
+            for (let i = 0; i < testData.data.length; i += 4) {
+                testData.data[i] = (i * 7) & 0xFF;
+                testData.data[i + 1] = (i * 13) & 0xFF;
+                testData.data[i + 2] = (i * 29) & 0xFF;
+                testData.data[i + 3] = 255;
+            }
+            ctx.putImageData(testData, 0, 0);
+
+            const readBack = ctx.getImageData(0, 0, 8, 8);
+            for (let i = 0; i < testData.data.length; i++) {
+                if (testData.data[i] !== readBack.data[i]) {
+                    return {
+                        ok: false,
+                        farblingDetected: true,
+                        reason: `Canvas gürültüsü/farbling tespit edildi (bayt ${i}: beklenen ${testData.data[i]}, okunan ${readBack.data[i]}).`
+                    };
+                }
+            }
+            return { ok: true, farblingDetected: false };
+        } catch (e) {
+            return { ok: false, farblingDetected: false, reason: e.message };
+        }
     }
 };

@@ -4,16 +4,16 @@
 
 ![StegoCrypt Banner](icon-192.png)
 
-### İstemci Taraflı İnkâr Edilebilir Steganografi, Sıfır İmza Kriptografi & Görünmez Metin PWA
+### İstemci Taraflı İstatistiksel Dirençli Steganografi, Kriptografi & Adli Bilişim Platformu
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests: Passing](https://img.shields.io/badge/Tests-21%20Unit%20%7C%208%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
 [![PWA Ready](https://img.shields.io/badge/PWA-100%25%20Offline-brightgreen.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Security: AES-256-GCM](https://img.shields.io/badge/Security-AES--256--GCM-success.svg)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
-[![KDF: PBKDF2-SHA256](https://img.shields.io/badge/KDF-PBKDF2--100k-orange.svg)](https://en.wikipedia.org/wiki/PBKDF2)
-[![Zero-Server](https://img.shields.io/badge/Privacy-100%25%20Client--Side-purple.svg)](#-gizlilik-ve-g%C3%BCvenlik-felsefesi)
-[![HEIC Support](https://img.shields.io/badge/Apple%20HEIC-Supported-lightgrey.svg)](#-geni%C5%9F-format--apple-heicheif-deste%C4%9Fi)
+[![KDF: PBKDF2-SHA256](https://img.shields.io/badge/KDF-PBKDF2--100k%2F600k-orange.svg)](https://en.wikipedia.org/wiki/PBKDF2)
+[![Zero-Server](https://img.shields.io/badge/Privacy-100%25%20Client--Side-purple.svg)](#-gizlilik-ve-tehdit-modeli)
 
-*Görsellerin derinliklerinde veriyi saklayın, matematiksel olarak varlığını inkar edin, LSB röntgeni ile analiz edin.*
+*Görsellerde en önemsiz bit (LSB) manipülasyonu, istatistiksel dağıtım, χ² steganaliz röntgeni ve görünmez metin şifreleme.*
 
 </div>
 
@@ -21,163 +21,125 @@
 
 ## 📖 Genel Bakış
 
-**StegoCrypt**, modern web teknolojileri (Web Crypto API, Streams API, Canvas, Service Worker) kullanılarak geliştirilmiş, **%100 istemci tarafında (client-side)** çalışan, sunucusuz (**zero-server**) bir siber güvenlik ve steganografi Progressive Web App'idir (PWA).
+**StegoCrypt**, modern web platformu standartları (Web Crypto API, Streams API, OffscreenCanvas/Canvas, Service Worker) üzerinde çalışan, **%100 istemci tarafında (client-side)** ve sunucusuz (**zero-server**) bir steganografi ve adli bilişim (forensics) web uygulamasıdır.
 
-Klasik steganografi araçlarının aksine açık metin dosya imzaları (`STEG` vb.) taşımaz, veriyi doğrusal değil **kriptografik PRNG** ile saçar ve VeraCrypt benzeri **İnkâr Edilebilir Şifreleme (Plausible Deniability)** mimarisiyle baskı/zorlama senaryolarında matematiksel inkar güvencesi sunar.
+Klasik steganografi araçlarının aksine açık metin dosya imzaları (`STEG`, `BM` vb.) bırakmaz; rastgeleleştirilmiş entropi başlığı, **kriptografik PRNG afin permütasyonu** ve **çift katmanlı inkâr edilebilir şifreleme** mimarisi içerir. Ayrıca adli analiz sekmesinde **LSB Bit Düzlemi Röntgeni** ve **Westfeld Pairs of Values $\chi^2$ Steganaliz Testi** ile taşıyıcı görsellerin istatistiksel anomalilerini raporlar.
 
-Tasarımı, göz yormayan **Material 3 (Adaçayı Yeşili & Mat Siyah)** paletiyle hazırlanmış olup masaüstü ve mobilde kusursuz bir yerel uygulama deneyimi sunar.
+Tasarımı, **Material 3 (Adaçayı Yeşili & Mat Kömür)** prensipleriyle kodlanmış olup masaüstü ve mobil ekranlarda duyarlı çalışır.
 
 ---
 
-## ✨ Temel Özellikler
+## 🛡️ Kriptografik ve Bilgi Teorisi Mimarisi
 
 ```mermaid
 flowchart LR
     subgraph Girdi ["1. Veri Hazırlığı"]
-        A["Gizli Metin / Dosya"] --> B["Deflate Sıkıştırma\n(2x - 5x Küçültme)"]
+        A["Gizli Metin / Dosya"] --> B["Streams API Deflate\n(2x - 5x Sıkıştırma)"]
     end
     subgraph Kripto ["2. Kriptografik Zırh"]
-        B --> C["PBKDF2 (100.000 iterasyon)\nAES-256-GCM"]
-        C --> D["Sıfır İmza Başlığı (64B)\nSaf Beyaz Gürültü"]
+        B --> C["PBKDF2-HMAC-SHA256\nAES-256-GCM (256-bit)"]
+        C --> D["Sıfır İmza Başlığı (64B)\nRastgele Entropi Bloğu"]
     end
-    subgraph Stego ["3. Piksel Dağıtımı"]
+    subgraph Stego ["3. Mekânsal Dağıtım"]
         D --> E["PRNG Aralarında Asal Adım\nO(1) Bellek Permütasyonu"]
         E --> F["Kanal Bölümleme\n(Even: Tuzak / Odd: Gerçek)"]
-        F --> G["1-LSB / 2-LSB\nKayıpsız PNG"]
+        F --> G["1-LSB / 2-LSB\nOpaklaştırılmış PNG"]
     end
 ```
 
-### 1. 🛡️ Askeri Düzey Kriptografi & Sıfır İmza (Zero-Signature)
-* **AES-256-GCM:** Kimlik doğrulamalı simetrik şifreleme (Authenticated Encryption with Associated Data).
-* **PBKDF2 Anahtar Türetimi:** SHA-256 ile 100.000 iterasyon; kaba kuvvet (brute-force) saldırılarına karşı endüstri standardı koruma.
-* **Taze Entropi:** Her şifrelemede `crypto.getRandomValues` ile 16 baytlık rastgele **Salt** ve 12 baytlık **IV** üretilir.
-* **Sıfır İmza (Zero-Signature):** Dosyada açık metin "STEG" gibi sihirli baytlar (magic bytes) bulunmaz. 64 baytlık başlık (Salt + IV + Şifreli Meta + Body IV) saf rastgele gürültüden farksızdır ($H \approx 8.0$ bit/bayt). Parola bilinmeden dosyanın steganografi içerip içermediği kanıtlanamaz.
-* **Erken Doğrulama & DoS Koruması:** 24 baytlık şifreli metadata bloğu AES-GCM kimlik doğrulama etiketiyle kilitlidir. Yanlış parolada bellek ayrılmadan mikrosaniyeler içinde reddedilir; OOM (bellek tükenmesi) kilitlenmelerini önler.
+### 1. Kimlik Doğrulamalı Simetrik Kriptografi (AES-256-GCM)
+* **AES-256-GCM:** Kimlik doğrulamalı şifreleme (AEAD) ile hem gizlilik hem de bütünlük/özgünlük doğrulaması sağlanır.
+* **Standart KDF Parametreleri:** Web Crypto API yerel PBKDF2-HMAC-SHA256 anahtar türetimi.
+* **Taze Entropi:** Her şifrelemede `crypto.getRandomValues` ile 16 baytlık kriptografik rastgele **Salt** ve 12 baytlık **IV** üretilir.
+* **Sıfır İmza (Zero-Signature):** Dosyada açık metin sihirli bayt (`magic string`) bulunmaz. 64 baytlık başlık (Salt + IV Meta + Şifreli Meta + IV Body) tekdüze sözde-rastgele bayt dizisi görünümündedir ($H \approx 8.0$ bit/bayt).
+* **Erken Doğrulama:** 24 baytlık şifreli metadata bloğu AES-GCM kimlik doğrulama etiketiyle kilitlidir. Yanlış parola girildiğinde gövde verisi işlenmeden anında hata üretilerek DoS ve bellek tükenmesi (OOM) önlenir.
 
-### 2. 🕵️ İnkâr Edilebilir Şifreleme (Plausible Deniability)
-* **VeraCrypt Tarzı Çift Katman:** Tek bir görsel içerisine iki bağımsız şifreli katman gömülür:
-  * **1. Katman (Tuzak / Decoy):** Baskı veya zorlama altında ifşa edilebilecek masum kılıf mesaj/dosya ve parolası (`even` renk kanalları).
-  * **2. Katman (Gerçek / Real):** Asıl gizli mesaj/dosya ve parolası (`odd` renk kanalları).
-* **Matematiksel Ayrıklık:** Çift ve tek kanallar küme teorisi gereği tamamen ayrıktır ($\{2k\} \cap \{2k+1\} = \emptyset$). Tuzak katmanı açan bir adli analizci, arka planda ikinci bir katman olduğunu kesinlikle kanıtlayamaz.
+### 2. İstatiksel İnceleme Direnci & LSB Dağıtımı
+* **PRNG Afin Saçılım:** Veri piksellerin başından itibaren sıralı gömülmez; tohumdan türetilen aralarında asal adımlarla ($O(1)$ bellek tüketimi) görselin tüm RGB kanallarına homojen dağıtılır.
+* **1-LSB & 2-LSB Seçimi:** Yüksek istatistiksel direnç için 1-LSB; yüksek taşıma kapasitesi için 2-LSB modu.
+* **Kayıpsız PNG & Canvas Alfa Düzleştirme:** Şeffaf PNG taşıyıcılarda premultiplied alpha kaynaklı RGB bozulmasını önlemek için alfa kanalı opaklaştırılır ve $\alpha = 255$ sabitlenir.
+* **Canvas Farbling Öz-Testi:** Açılışta test deseni çizilerek Brave Shields, Firefox RFP veya gizlilik eklentilerinin canvas verilerine gürültü ekleyip eklemediği denetlenir.
 
-### 3. 🎲 PRNG Dağınık Piksel Şifreleme (Pixel Scattering)
-* **Homojen Saçılım:** Veri piksellerin başından itibaren sıralı gömülmez; parolanın tohumundan türetilen aralarında asal adımlarla görselin tüm yüzeyine eşit olarak dağıtılır.
-* **$O(1)$ Bellek Optimizasyonu:** Milyonlarca pikseli bellekte dizi olarak tutan hantal Fisher-Yates algoritmaları yerine, affine kongrüans üreteci ile $O(1)$ RAM kullanarak 4K görsellerde bile donma yapmadan çalışır.
+### 3. Deneysel / Yüksek Riskli İnkâr Modu (Plausible Deniability)
+* Tek bir görsel içerisine iki bağımsız şifreli katman gömülür:
+  * **Tuzak Katman (Decoy):** Baskı/zorlama anında teslim edilebilecek zararsız kılıf veri (`even` kanalları).
+  * **Gerçek Katman (Real):** Asıl gizli veri (`odd` kanalları).
+* > [!WARNING]
+  > **Tespit Edilebilirlik vs. İnkâr Edilebilirlik Ödünleşimi (Trade-off):**
+  > 1. Tuzak parolanın teslim edilmesi, adli analizciye görselin steganografi taşıdığını resmen bildirir.
+  > 2. Tek kanallar boş bırakılırsa, çift ve tek kanallar arasındaki yerel varyans/entropi asimetrisi ikinci katmanın varlığına dair şüphe yaratabilir.
+  > 3. Tek kanallar yapay gürültüyle doldurulursa, taşıyıcının tamamı manipüle edilmiş olacağından $\chi^2$ veya RS testleri gömmeyi doğrudan tespit edebilir.
+  > Ayrıntılı analiz için [THREAT_MODEL.md](docs/THREAT_MODEL.md) belgesini inceleyin.
 
-### 4. 🔬 Faz 4: LSB Steganaliz & Röntgen Dedektörü
-* **LSB Bit Düzlemi Röntgeni (Bit-Plane Visualizer):** Görselin Bit 0 ve Bit 1 düzlemlerini RGB, Kırmızı, Yeşil ve Mavi renk kanallarına ayırarak steganografi izlerini siyah-beyaz röntgen haritası olarak gösterir.
-* **Westfeld-Pfitzmann Chi-Square ($\chi^2$) PoVs Testi:** Değer çiftlerinin (Pairs of Values: $2k, 2k+1$) frekans dağılımını ölçerek Wilson-Hilferty normalleştirilmiş dönüşümüyle LSB manipülasyon olasılığını ($p$-değeri) istatistiksel olarak hesaplar.
-
-### 5. 🍏 Geniş Format & Apple HEIC/HEIF Desteği
-* **İstemci Taraflı `heic2any`:** iPhone ve iPad'lerden yüklenen Apple `.heic` / `.heif` formatındaki fotoğraflar harici sunucuya gitmeden tarayıcı Web Worker'ı içinde otomatik olarak PNG'ye çevrilir.
-* **Desteklenen Taşıyıcı Formatlar:** PNG, JPG, JPEG, WEBP, HEIC, HEIF, BMP ve GIF.
-* **Her Türlü Gizli Dosya:** PDF, ZIP, DOCX, ses dosyaları, kaynak kodlar vb. tüm ikili (binary) dosyalar görsellerin içine gömülebilir ve orijinal adıyla geri indirilebilir.
-
-### 6. 📱 QR Kod Üretici & Tarayıcı (QREngine)
-* **Sıfır Genişlikli (Zero-Width) Unicode QR:** Görünmez şifreli mesajlar için tek tıkla QR Kod üretimi.
-* **UTF-8 Bayt Koruması:** Standart QR kütüphanelerinin aksine `TextEncoder` entegrasyonu ile Türkçe karakterler ve görünmez Unicode (`\u200B`, `\u200C`, vb.) kayıpsız korunur.
-* **Görselden QR Tarama:** Çözme sekmesinde ekran görüntüsü veya kamera fotoğrafından doğrudan QR kod okuma (`jsQR`).
-
-### 7. 🗜️ Pre-Encryption Deflate Sıkıştırma
-* Yerel Streams API (`CompressionStream('deflate')`) ile şifreleme öncesi veri sıkıştırılarak taşıyıcı görsel kapasitesi **2 ila 5 katına** çıkarılır.
-* Kötü niyetli "Decompression Bomb" saldırılarına karşı **50 MB** tavan güvenlik sınırı içerir.
-
-### 8. ⚡ 1-LSB & 2-LSB Çift Kapasite Modu
-* **1-LSB (Yüksek Güvenlik):** Kanal başına 1 bit; istatistiksel olarak tespit edilmesi son derece zor.
-* **2-LSB (Yüksek Kapasite):** Kanal başına 2 bit; görsel kalitesini bozmadan birkaç megabaytlık büyük dosyaların taşınmasını sağlar.
-* **Otomatik Tespit:** Şifre çözücü, görselin 1-LSB mi yoksa 2-LSB mi olduğunu şifreli başlık sayesinde otomatik anlar; kullanıcıdan ayar istemez.
-
-### 9. 👻 Görünmez Metin (Zero-Width Steganography)
-* Görsel kullanmadan metinlerin içine görünmez Unicode karakterleri (`\u200B`, `\u200C`) ile şifreli veri gömer. WhatsApp, Telegram veya Signal gibi mesajlaşma platformlarının görsel sıkıştırma algoritmalarından etkilenmez.
-
-### 10. 🔒 Sıkılaştırılmış Tarayıcı Güvenliği & Gizlilik
-* **Strict CSP:** `connect-src 'self'` ile harici ağ çıkışı, veri sızıntısı veya telemetri tamamen imkansızdır.
-* **Hassas Bellek Temizliği (Zeroization):** İşlem bittiğinde RAM'deki `Uint8Array` dizileri `buffer.fill(0)` ile sıfırlanır.
-* **Panoyu Otomatik Temizleme:** Kopyalanan hassas mesajlar 30 saniye sonra panodan otomatik olarak silinir.
-* **Dizin Atlama (Path Traversal) Koruması:** Çıkartılan dosya adları dizin ayraçlarından temizlenir.
+### 4. Bellek Sıfırlama Gerçekliği (Best-Effort Zeroization)
+* Kriptografik ve piksel tamponları işlem tamamlandığında `Uint8Array.fill(0)` ile sıfırlanır.
+* Ancak JavaScript çalışma zamanında (V8 / SpiderMonkey) HTML form alanlarından okunan parola string'leri heap bellekte immutable (değiştirilemez) nesneler olarak yaşar ve Garbage Collector (GC) temizleyene kadar RAM dökümünde kalabilir. İddia **"Best-Effort Memory Zeroization"** düzeyindedir.
 
 ---
 
-## 📊 Klasik LSB Steganografi vs. StegoCrypt
+## 📡 İletim Kanalı Kuralı (Carrier Channel Rule)
 
-| Özellik | Geleneksel LSB Araçları | StegoCrypt PWA |
-| :--- | :--- | :--- |
-| **İmza / Magic Bytes** | `STEG`, `BM`, `RIFF` gibi açık metin | ❌ **Sıfır İmza:** Saf beyaz gürültü başlığı |
-| **Piksel Dağıtımı** | Doğrusal (Piksel 0, 1, 2...) | 🎲 **PRNG Dağınık ($O(1)$ Coprime Permütasyon)** |
-| **İnkâr Edilebilirlik** | Yok (Tek parola, tek veri) | 🕵️ **VeraCrypt Çift Katman (Tuzak & Gerçek)** |
-| **Steganaliz Koruması** | $\chi^2$ (Chi-square) testinde kolayca yakalanır | 🛡️ Homojen PRNG saçılımı ile tespit dirençli |
-| **Steganaliz Röntgeni** | Yok | 🔬 **Dahili Bit-Plane Görselleştirici & $\chi^2$ Testi** |
-| **Veri Sıkıştırma** | Genellikle yok | 🗜️ **Yerel Deflate (Bomb Korumalı)** |
-| **Kapasite Seçimi** | Sabit 1-LSB | ⚡ **1-LSB / 2-LSB Çift Mod (Otomatik Tespit)** |
-| **Apple HEIC Desteği**| Yok (Safari/iOS hatası) | 🍏 **İstemci Taraflı Otomatik Dönüşüm** |
-| **QR Kod Entegrasyonu**| Yok | 📱 **UTF-8 & Zero-Width Destekli QR Motoru** |
-| **Çalışma Modeli** | Çoğunlukla Python/Sunucu | 🌐 **%100 İstemci Taraflı PWA (Uçak Modu Uyumlu)** |
+> [!IMPORTANT]
+> **Kanal Kuralı:** Taşıyıcı PNG görselleri WhatsApp, Telegram, Signal gibi platformlar üzerinden iletilirken kesinlikle **"Fotoğraf"** olarak değil, **"Belge / Dosya (Kayıpsız)"** seçeneğiyle gönderilmelidir.
+> Sosyal ağlar fotoğrafları kayıplı (lossy JPEG/WebP) olarak sıkıştırdığında piksellerin en önemsiz bitleri $\%40-\%60$ oranında bozulur ve mekânsal alanda hiçbir veri kurtarılamaz.
 
 ---
 
-## 🚀 Kurulum ve Yerel Çalıştırma
+## 🔬 Adli Bilişim & Steganaliz Röntgeni
 
-StegoCrypt tamamen statik dosyalardan oluşur (HTML, CSS, Vanilla JS). Herhangi bir backend, node runtime veya veritabanı gerektirmez.
+Uygulamanın **🔬 Steganaliz** sekmesi iki temel adli bilişim aracı sunar:
+1. **LSB Bit Düzlemi Röntgeni:** Bit 0 ve Bit 1 düzlemlerini RGB veya tekil renk kanalları (Kırmızı, Yeşil, Mavi) bazında ayrıştırıp görselleştirir.
+2. **Westfeld Pairs of Values $\chi^2$ Testi:** Değer çiftlerinin ($2k, 2k+1$) frekans dağılımını ölçerek Wilson-Hilferty normalleştirilmiş dönüşümüyle LSB manipülasyon olasılığını ve $p$-değerini raporlar.
 
-### 1. Depoyu Klonlayın
+---
+
+## 🧪 Test ve Doğrulama
+
+Proje, hem Node.js yerel test ortamında birim testleriyle hem de Playwright ile gerçek Chromium tarayıcısında uçtan uca (E2E) test edilmektedir.
+
 ```bash
-git clone https://github.com/VelliDR/stegocrypt-pwa.git
-cd stegocrypt-pwa
+# Bağımlılıkları yükleyin
+npm install
+
+# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth)
+npm run test:unit
+
+# 2. Tarayıcı Uçtan Uca (E2E) Testleri (Playwright + Chromium)
+npm run test:e2e
 ```
 
-### 2. Yerel Bir Sunucu ile Başlatın
-Service Worker ve Web Crypto API güvenlik kuralları gereği uygulamanın `http://localhost` veya `https://` üzerinden sunulması gerekir:
+**Mevcut Test Durumu:**
+- **21 / 21** Birim Testi Başarılı (`node:test`, 560 ms)
+- **8 / 8** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF entegrasyonu)
+
+---
+
+## 📁 Teknik Dokümantasyon
+
+- [THREAT_MODEL.md](docs/THREAT_MODEL.md) — Kerckhoffs ilkesi, saldırgan sınıfları, koruma sınırları ve kanal rehberi.
+- [FORMAT.md](docs/FORMAT.md) — Format v1 (sıralı), Format v2 (sıfır imza dağınık) ve Format v3 spesifikasyonu ve test vektörleri.
+- [SECURITY.md](SECURITY.md) — Güvenlik politikası ve sorumlu açık bildirimi (responsible disclosure).
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — Lisans bildirimleri (heic2any MIT, libheif LGPL-3.0, jsQR Apache-2.0, qrcode-generator MIT).
+- [VENDOR.md](docs/VENDOR.md) — Bağımlılık envanteri ve doğrulanmış SHA-256 kriptografik özetleri.
+
+---
+
+## 🚀 Yerel Çalıştırma
+
+StegoCrypt tamamen statik web varlıklarından oluşur.
 
 ```bash
 # Python ile:
 python3 -m http.server 8080
 
 # veya Node.js ile:
-npx serve .
+node tests/helpers/static-server.js
 ```
 
-Tarayıcınızda `http://localhost:8080` adresine gidin.
-
-### 3. PWA Olarak Cihaza Yükleme
-* **Chrome / Edge (Masaüstü):** Adres çubuğundaki "Uygulamayı Yükle" ikonuna tıklayın.
-* **iOS Safari:** "Paylaş" > "Ana Ekrana Ekle" butonuna dokunun.
-* **Android Chrome:** Seçenekler menüsünden "Uygulamayı Yükle" seçeneğini kullanın.
-* Yüklendikten sonra internet bağlantınızı keserek (uçak modunda) test edebilirsiniz.
-
----
-
-## 🛠️ Mimari ve Dizin Yapısı
-
-```
-stegocrypt-pwa/
-├── index.html                   # Material 3 UI, CSP politikası ve erişilebilirlik
-├── manifest.json                # PWA konfigürasyonu ve maskable ikon tanımları
-├── sw.js                        # Service Worker (v6 önbellekleme ve çevrimdışı motor)
-├── icon-192.png / icon-512.png  # PWA uygulama ikonları
-├── js/
-│   ├── app.js                   # UI olayları, orkestrasyon ve güvenlik kontrolleri
-│   ├── CryptoEngine.js          # AES-256-GCM, PBKDF2 ve Sıfır İmza motoru
-│   ├── StegoEngine.js           # LSB piksel gömücü, okuyucu ve otomatik çözücü
-│   ├── ScatterEngine.js         # O(1) aralarında asal PRNG dağıtım motoru
-│   ├── SteganalysisEngine.js    # LSB Bit Düzlemi Röntgeni & Chi-Square PoVs testi
-│   ├── CompressionEngine.js     # Deflate sıkıştırma & Decompression bomb koruması
-│   ├── ImageEngine.js           # Tuval ölçekleme & HEIC/HEIF otomatik dönüştürücü
-│   ├── ZeroWidthEngine.js       # Sıfır genişlikli Unicode (ZWC) görünmez metin motoru
-│   ├── QREngine.js              # UTF-8 ve ZWC destekli QR kod üretici & tarayıcı
-│   └── vendor/
-│       ├── heic2any.min.js      # İstemci taraflı Apple HEIC/HEIF çözücü
-│       ├── qrcode.mjs           # Version 1-40 UTF-8 QR kod üreteci
-│       └── jsQR.js              # Saf JS QR kod okuyucu
-```
-
----
-
-## ⚠️ Sorumluluk Reddi (Disclaimer)
-
-Bu yazılım yalnızca **eğitim, akademik araştırma ve meşru gizlilik koruma** amaçlarıyla geliştirilmiştir. Kullanıcıların yerel yasaları ihlal eden veya kötü niyetli eylemlerinden yazılım geliştiricileri sorumlu tutulamaz.
+Tarayıcınızda `http://localhost:8080` adresini açın. PWA özellikleri için Service Worker otomatik devreye girer.
 
 ---
 
 ## 📄 Lisans
 
-Bu proje [MIT Lisansı](LICENSE) altında lisanslanmıştır. Dilediğiniz gibi kullanabilir, katkıda bulunabilir ve çatallayabilirsiniz.
+Bu proje [MIT Lisansı](LICENSE) altında sunulmuştur. Üçüncü taraf kütüphane bildirimleri için [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) dosyasına bakınız.

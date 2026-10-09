@@ -178,12 +178,15 @@ export const CryptoEngine = {
         const ciphertext = payload.subarray(36, 36 + cipherLen);
 
         const key = await this.deriveKey(password, salt);
-        const decryptedBuffer = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv },
-            key,
-            ciphertext
-        );
-
-        return new Uint8Array(decryptedBuffer);
+        try {
+            const decryptedBuffer = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                key,
+                ciphertext
+            );
+            return new Uint8Array(decryptedBuffer);
+        } catch {
+            throw new Error("Parola yanlış veya şifreli veri paketi bozulmuş.");
+        }
     }
 };

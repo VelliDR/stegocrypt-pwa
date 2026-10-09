@@ -901,5 +901,12 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// ---------- Başlangıç ----------
+// ---------- Başlangıç & Bütünlük Kontrolleri ----------
+const canvasCheck = ImageEngine.verifyCanvasIntegrity();
+if (canvasCheck.farblingDetected) {
+    const bannerCanvasWarning = document.getElementById('banner-canvas-warning');
+    if (bannerCanvasWarning) bannerCanvasWarning.style.display = 'flex';
+    console.warn("StegoCrypt Canvas Uyarısı:", canvasCheck.reason);
+}
+
 updateHideModeUI();

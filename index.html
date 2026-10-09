@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self';">
     <meta name="referrer" content="no-referrer">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -314,6 +314,14 @@
         <p>Resim İçi Steganografi & Görünmez Metin Şifreleme</p>
     </header>
 
+    <!-- Tarayıcı Canvas Bütünlük Uyarısı (Farbling / Parmak İzi Koruması Tespiti) -->
+    <div id="banner-canvas-warning" class="m3-banner" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error); margin-bottom: 16px;">
+        <span style="font-size: 1.2rem;">⚠️</span>
+        <span style="font-size: 0.82rem; line-height: 1.4;">
+            <b>Tarayıcı Canvas Koruması Tespit Edildi:</b> Tarayıcınız (Brave Shields, Firefox RFP veya gizlilik eklentisi) piksel verilerine yapay gürültü ekliyor. Bu durum steganografik LSB verilerini bozabilir ve şifre çözmeyi engelleyebilir. Lütfen bu site için parmak izi korumasını kapatın.
+        </span>
+    </div>
+
     <nav class="m3-segmented-button">
         <button class="m3-segment-btn active" id="btn-tab-hide">İçerik Gizle</button>
         <button class="m3-segment-btn" id="btn-tab-reveal">İçerik Çöz</button>
@@ -351,6 +359,9 @@
             <div class="capacity-info">
                 <span id="capacity-text">Kapasite: Görsel bekleniyor</span>
             </div>
+            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 6px; line-height: 1.4;">
+                💡 <b>İletim Kuralı:</b> WhatsApp/Telegram üzerinden gönderirken mutlaka <b>"Belge / Dosya (Kayıpsız)"</b> olarak aktarın. Kayıplı fotoğraf sıkıştırması LSB verisini bozar.
+            </p>
         </div>
 
         <!-- Gizleme Yoğunluğu & Kapasite Modu -->
@@ -387,10 +398,10 @@
         <div class="m3-field" id="container-deniable-toggle">
             <label class="radio-option" style="cursor: pointer; user-select: none;">
                 <input type="checkbox" id="check-deniable" style="width: 18px; height: 18px; accent-color: var(--md-primary);">
-                🕵️ İnkâr Edilebilir Şifreleme (Tuzak Katman Ekle)
+                🕵️ İnkâr Edilebilir Çift Katman (Deneysel / Yüksek Tespit Riski)
             </label>
-            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 4px; margin-left: 26px;">
-                Baskı altında kalındığında verilmek üzere masum bir kılıf parola ve mesajı ekler.
+            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 4px; margin-left: 26px; line-height: 1.4;">
+                Baskı altında teslim edilecek masum kılıf içerik ekler. <i>Dikkat: Çift katman kullanımı yerel varyans farkı veya yüksek manipülasyon nedeniyle steganaliz tespit riskini artırır.</i>
             </p>
         </div>
 

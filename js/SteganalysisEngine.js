@@ -75,7 +75,8 @@ export const SteganalysisEngine = {
             const f1 = freq[2 * pair + 1];
             const total = f0 + f1;
 
-            if (total > 8) {
+            // Beklenen frekans >= 5 şartı (asemptotik Ki-Kare şartı, total >= 10)
+            if (total >= 10) {
                 const expected = total / 2;
                 chiSquare += Math.pow(f0 - expected, 2) / expected;
                 chiSquare += Math.pow(f1 - expected, 2) / expected;
@@ -83,36 +84,44 @@ export const SteganalysisEngine = {
             }
         }
 
-        if (k <= 0) {
+        const dof = k - 1;
+        if (dof <= 0) {
             return {
                 probability: 0,
                 chiSquare: 0,
                 dof: 0,
                 verdict: "Yetersiz Veri",
-                details: "Görsel istatistiksel analiz için uygun değil."
+                details: "Görsel istatistiksel analiz için uygun değil veya varyasyon çok düşük."
             };
         }
 
-        // Wilson-Hilferty normal dönüşümü
-        const z = (Math.pow(chiSquare / k, 1 / 3) - (1 - 2 / (9 * k))) / Math.sqrt(2 / (9 * k));
-        const pValue = normalCDF(z);
-        const probability = Math.max(0, Math.min(100, (1 - pValue) * 100));
+        // Wilson-Hilferty normal dönüşümü (dof = k - 1 serbestlik derecesi)
+        // Stego görsellerde (eşitlenmiş PoVs) z ~ N(0, 1) civarındadır.
+        // Doğal görsellerde çiftler arasındaki doğal asimetri yüzünden z >> 5 çıkar.
+        const safeChiSquare = Math.max(0, chiSquare);
+        const z = (Math.pow(safeChiSquare / dof, 1 / 3) - (1 - 2 / (9 * dof))) / Math.sqrt(2 / (9 * dof));
+        const cdf = normalCDF(z);
+        const pValue = Math.max(0, Math.min(1, 1 - cdf)); // Westfeld sağ-kuyruk p-değeri
+
+        // Stego güven skoru: z <= 2.5 (stego dağılımı içi) için yüksek olasılık, z > 5 için %0
+        const probability = Math.max(0, Math.min(100, 100 / (1 + Math.exp((z - 2.5) * 1.5))));
 
         let verdict = "Temiz / Doğal Görsel";
-        let details = "LSB piksel çiftlerinde doğal varyasyon tespit edildi. Görselde sıralı LSB manipülasyonu bulunmuyor veya PRNG homojen dağıtımla gizlenmiş.";
+        let details = "LSB piksel çiftlerinde doğal varyasyon tespit edildi. Görselde LSB Replacement yöntemi izi saptanmadı (Not: Bu test LSB Replacement tespitine yöneliktir).";
 
-        if (probability >= 75) {
+        if (probability >= 70) {
             verdict = "⚠️ Yüksek Olasılıkla LSB Şifreli Veri İçeriyor";
-            details = "LSB değer çiftleri (PoVs) belirgin şekilde eşitlenmiş. Görselde açık LSB steganografi manipülasyonu tespit edildi.";
-        } else if (probability >= 40) {
+            details = "LSB değer çiftleri (PoVs) belirgin şekilde eşitlenmiş. Görselde belirgin LSB Replacement manipülasyonu tespit edildi.";
+        } else if (probability >= 30) {
             verdict = "🔍 Şüpheli LSB Örüntüsü";
             details = "Piksel çiftlerinde kısmi homojenleşme var. Kısmi LSB gömme veya yapay sıkıştırma yapılmış olabilir.";
         }
 
         return {
             probability: parseFloat(probability.toFixed(1)),
-            chiSquare: parseFloat(chiSquare.toFixed(2)),
-            dof: k,
+            chiSquare: parseFloat(safeChiSquare.toFixed(2)),
+            dof,
+            pValue: parseFloat(pValue.toFixed(4)),
             verdict,
             details
         };
