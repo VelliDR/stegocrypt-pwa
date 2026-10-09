@@ -12,6 +12,7 @@ import { AdaptiveEngine } from './AdaptiveEngine.js';
 import { BinaryInspector } from './BinaryInspector.js';
 import { DiffEngine } from './DiffEngine.js';
 import { ZeroWidthDetector } from './ZeroWidthDetector.js';
+import { ZstegScanner } from './ZstegScanner.js';
 
 class StegoWorkerClientManager {
     constructor() {
@@ -454,6 +455,60 @@ class StegoWorkerClientManager {
 
         // Fallback
         return ZeroWidthDetector.analyze(text);
+    }
+
+    /**
+     * Faz 6: zsteg Benzeri 56-Kombinasyon Derin Adli Bit Düzlemi Taraması
+     */
+    async scanZsteg({ pixelBuffer, width, height, maxSampleBytes = 2048, onProgress = null }) {
+        const workerBuffer = pixelBuffer.slice(0);
+        const transferList = [workerBuffer];
+
+        const workerPromise = this._send(
+            'SCAN_ZSTEG',
+            { pixelBuffer: workerBuffer, width, height, maxSampleBytes },
+            transferList,
+            onProgress
+        );
+
+        if (workerPromise) {
+            const res = await workerPromise;
+            return res.findings;
+        }
+
+        // Fallback
+        const imageData = { width, height, data: new Uint8ClampedArray(pixelBuffer) };
+        return ZstegScanner.scan(imageData, {
+            maxSampleBytes,
+            onProgress: (percent, currentCombo, foundCount) => {
+                if (onProgress) onProgress(percent, `${currentCombo} taranıyor... (${foundCount} bulgu)`);
+            }
+        });
+    }
+
+    /**
+     * Faz 6: Belirli bir zsteg kombinasyonundan tam yük (payload) çıkarma
+     */
+    async extractZstegPayload({ pixelBuffer, width, height, comboId, maxBytes = 1048576, onProgress = null }) {
+        const workerBuffer = pixelBuffer.slice(0);
+        const transferList = [workerBuffer];
+
+        const workerPromise = this._send(
+            'EXTRACT_ZSTEG_PAYLOAD',
+            { pixelBuffer: workerBuffer, width, height, comboId, maxBytes },
+            transferList,
+            onProgress
+        );
+
+        if (workerPromise) {
+            const res = await workerPromise;
+            return new Uint8Array(res.payloadBuffer);
+        }
+
+        // Fallback
+        if (onProgress) onProgress(40, `${comboId} akışı tam olarak çıkarılıyor...`);
+        const imageData = { width, height, data: new Uint8ClampedArray(pixelBuffer) };
+        return ZstegScanner.extractPayload(imageData, comboId, maxBytes);
     }
 }
 

@@ -20,6 +20,7 @@ import { PngCodec } from './png/PngCodec.js';
 import { BinaryInspector } from './BinaryInspector.js';
 import { DiffEngine } from './DiffEngine.js';
 import { ZeroWidthDetector } from './ZeroWidthDetector.js';
+import { ZstegScanner } from './ZstegScanner.js';
 
 // ---------- Durum Değişkenleri ----------
 let currentHideCanvasData = null;
@@ -1089,21 +1090,23 @@ if (dropzoneInspect) setupDropzone(dropzoneInspect, processInspectFile);
     });
 });
 
-// ---------- FAZ 5: STEGO-WORKBENCH & FORENSİK TRİYAJ ----------
-// 1. Alt Sekme Menüsü (LSB / Binary / Diff / Zero-Width)
+// ---------- FAZ 5 & 6: STEGO-WORKBENCH, FORENSİK TRİYAJ & zsteg DERİN TARAYICI ----------
+// 1. Alt Sekme Menüsü (LSB / Binary / Diff / Zero-Width / zsteg)
 const btnSubtabLsb = document.getElementById('btn-subtab-lsb');
 const btnSubtabBinary = document.getElementById('btn-subtab-binary');
 const btnSubtabDiff = document.getElementById('btn-subtab-diff');
 const btnSubtabZeroWidth = document.getElementById('btn-subtab-zerowidth');
+const btnSubtabZsteg = document.getElementById('btn-subtab-zsteg');
 
 const subtabContentLsb = document.getElementById('subtab-content-lsb');
 const subtabContentBinary = document.getElementById('subtab-content-binary');
 const subtabContentDiff = document.getElementById('subtab-content-diff');
 const subtabContentZeroWidth = document.getElementById('subtab-content-zerowidth');
+const subtabContentZsteg = document.getElementById('subtab-content-zsteg');
 
 function switchInspectSubtab(activeTab) {
-    [btnSubtabLsb, btnSubtabBinary, btnSubtabDiff, btnSubtabZeroWidth].forEach(b => b?.classList.remove('active'));
-    [subtabContentLsb, subtabContentBinary, subtabContentDiff, subtabContentZeroWidth].forEach(c => c?.classList.remove('active'));
+    [btnSubtabLsb, btnSubtabBinary, btnSubtabDiff, btnSubtabZeroWidth, btnSubtabZsteg].forEach(b => b?.classList.remove('active'));
+    [subtabContentLsb, subtabContentBinary, subtabContentDiff, subtabContentZeroWidth, subtabContentZsteg].forEach(c => c?.classList.remove('active'));
 
     if (activeTab === 'lsb') {
         btnSubtabLsb?.classList.add('active');
@@ -1117,6 +1120,9 @@ function switchInspectSubtab(activeTab) {
     } else if (activeTab === 'zerowidth') {
         btnSubtabZeroWidth?.classList.add('active');
         subtabContentZeroWidth?.classList.add('active');
+    } else if (activeTab === 'zsteg') {
+        btnSubtabZsteg?.classList.add('active');
+        subtabContentZsteg?.classList.add('active');
     }
 }
 
@@ -1124,6 +1130,7 @@ if (btnSubtabLsb) btnSubtabLsb.addEventListener('click', () => switchInspectSubt
 if (btnSubtabBinary) btnSubtabBinary.addEventListener('click', () => switchInspectSubtab('binary'));
 if (btnSubtabDiff) btnSubtabDiff.addEventListener('click', () => switchInspectSubtab('diff'));
 if (btnSubtabZeroWidth) btnSubtabZeroWidth.addEventListener('click', () => switchInspectSubtab('zerowidth'));
+if (btnSubtabZsteg) btnSubtabZsteg.addEventListener('click', () => switchInspectSubtab('zsteg'));
 
 // 2. İkili Yapı (Binary Inspector) & Dosya Triyajı
 const dropzoneBinary = document.getElementById('dropzone-binary');
@@ -1504,6 +1511,205 @@ if (btnCopyCleanText) {
     });
 }
 
+// ---------- FAZ 6: zsteg TARZI 56-KOMBİNASYON DERİN BİT DÜZLEMİ TARAYICI ----------
+const dropzoneZsteg = document.getElementById('dropzone-zsteg');
+const fileZstegInput = document.getElementById('file-zsteg');
+const labelZstegFile = document.getElementById('label-zsteg-file');
+const previewZsteg = document.getElementById('preview-zsteg');
+
+const btnStartZsteg = document.getElementById('btn-start-zsteg');
+const btnStopZsteg = document.getElementById('btn-stop-zsteg');
+
+const containerZstegProgress = document.getElementById('container-zsteg-progress');
+const zstegProgressBar = document.getElementById('zsteg-progress-bar');
+const zstegStatusLabel = document.getElementById('zsteg-status-label');
+const zstegPctLabel = document.getElementById('zsteg-pct-label');
+
+const containerZstegResults = document.getElementById('container-zsteg-results');
+const zstegFindingsCount = document.getElementById('zsteg-findings-count');
+const zstegEmptyState = document.getElementById('zsteg-empty-state');
+const tableZstegResults = document.getElementById('table-zsteg-results');
+const tbodyZstegResults = document.getElementById('tbody-zsteg-results');
+
+let currentZstegImageData = null;
+let isZstegCancelled = false;
+
+async function handleZstegFile(file) {
+    if (!file) return;
+    try {
+        showStatus("Görsel yükleniyor...");
+        if (labelZstegFile) labelZstegFile.innerText = `📄 ${file.name}`;
+
+        // PNG dosyalarında saf codec tercih et
+        if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
+            const buf = await file.arrayBuffer();
+            const decoded = await StegoWorkerClient.decodePng(buf);
+            currentZstegImageData = {
+                width: decoded.width,
+                height: decoded.height,
+                data: decoded.data
+            };
+        } else {
+            const imgData = await ImageEngine.loadImage(file);
+            currentZstegImageData = imgData;
+        }
+
+        // Önizleme göster
+        if (previewZsteg) {
+            const url = URL.createObjectURL(file);
+            previewZsteg.src = url;
+            previewZsteg.style.display = 'block';
+        }
+
+        if (containerZstegResults) containerZstegResults.style.display = 'none';
+        if (containerZstegProgress) containerZstegProgress.style.display = 'none';
+
+        hideStatus();
+    } catch (err) {
+        showStatus("Görsel yükleme hatası: " + err.message, true);
+    }
+}
+
+if (fileZstegInput) fileZstegInput.addEventListener('change', (e) => handleZstegFile(e.target.files[0]));
+if (dropzoneZsteg) setupDropzone(dropzoneZsteg, handleZstegFile);
+
+async function runZstegScan() {
+    if (!currentZstegImageData) {
+        showStatus("Lütfen önce taranacak bir görsel seçin.", true);
+        return;
+    }
+
+    try {
+        isZstegCancelled = false;
+        if (btnStartZsteg) btnStartZsteg.style.display = 'none';
+        if (btnStopZsteg) btnStopZsteg.style.display = 'inline-flex';
+        if (containerZstegProgress) containerZstegProgress.style.display = 'block';
+        if (containerZstegResults) containerZstegResults.style.display = 'none';
+
+        if (zstegProgressBar) zstegProgressBar.style.width = '0%';
+        if (zstegPctLabel) zstegPctLabel.innerText = '%0';
+        if (zstegStatusLabel) zstegStatusLabel.innerText = '56 kombinasyon taranıyor...';
+
+        const pixelBuffer = currentZstegImageData.data.buffer.slice(0);
+        const width = currentZstegImageData.width;
+        const height = currentZstegImageData.height;
+
+        const findings = await StegoWorkerClient.scanZsteg({
+            pixelBuffer,
+            width,
+            height,
+            maxSampleBytes: 2048,
+            onProgress: (pct, msg) => {
+                if (zstegProgressBar) zstegProgressBar.style.width = `${pct}%`;
+                if (zstegPctLabel) zstegPctLabel.innerText = `%${pct}`;
+                if (zstegStatusLabel) zstegStatusLabel.innerText = msg;
+            }
+        });
+
+        if (isZstegCancelled) {
+            showStatus("Tarama kullanıcı tarafından durduruldu.");
+            return;
+        }
+
+        // Sonuçları göster
+        if (containerZstegResults) containerZstegResults.style.display = 'block';
+        if (zstegFindingsCount) zstegFindingsCount.innerText = `${findings.length} Bulgu`;
+
+        if (tbodyZstegResults) {
+            tbodyZstegResults.innerHTML = '';
+            if (findings.length === 0) {
+                if (zstegEmptyState) zstegEmptyState.style.display = 'block';
+                if (tableZstegResults) tableZstegResults.style.display = 'none';
+            } else {
+                if (zstegEmptyState) zstegEmptyState.style.display = 'none';
+                if (tableZstegResults) tableZstegResults.style.display = 'table';
+
+                findings.forEach(f => {
+                    const tr = document.createElement('tr');
+                    const confColor = f.confidence === 'high' ? 'var(--md-primary)' : '#ffd180';
+                    const safePreview = (f.preview || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const safeDetail = (f.detail || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                    tr.innerHTML = `
+                        <td><code style="color: var(--md-primary); font-weight: 700;">${f.comboId}</code></td>
+                        <td><b>${f.title}</b></td>
+                        <td style="max-width: 220px; word-break: break-all;">
+                            <div style="font-family: monospace; font-size: 0.72rem; color: var(--md-on-surface);">${safePreview}</div>
+                            <div style="font-size: 0.65rem; color: var(--md-on-surface-variant); opacity: 0.8;">${safeDetail}</div>
+                        </td>
+                        <td><span style="color: ${confColor}; font-weight: 600;">${f.confidence === 'high' ? 'Yüksek' : 'Orta'}</span></td>
+                        <td>
+                            <button type="button" class="m3-btn m3-btn-tonal btn-zsteg-export" 
+                                data-combo="${f.comboId}" 
+                                data-ext="${f.ext || 'bin'}" 
+                                style="width: auto; padding: 4px 10px; font-size: 0.72rem; margin: 0; border-radius: 6px;">
+                                💾 İndir
+                            </button>
+                        </td>
+                    `;
+                    tbodyZstegResults.appendChild(tr);
+                });
+            }
+        }
+
+        if (zstegStatusLabel) zstegStatusLabel.innerText = `Tarama bitti: ${findings.length} bulgu`;
+        showStatus(`zsteg derin tarama tamamlandı (${findings.length} bulgu).`);
+    } catch (err) {
+        showStatus("zsteg tarama hatası: " + err.message, true);
+    } finally {
+        if (btnStartZsteg) btnStartZsteg.style.display = 'inline-flex';
+        if (btnStopZsteg) btnStopZsteg.style.display = 'none';
+    }
+}
+
+if (btnStartZsteg) btnStartZsteg.addEventListener('click', runZstegScan);
+
+if (btnStopZsteg) {
+    btnStopZsteg.addEventListener('click', () => {
+        isZstegCancelled = true;
+        if (btnStartZsteg) btnStartZsteg.style.display = 'inline-flex';
+        if (btnStopZsteg) btnStopZsteg.style.display = 'none';
+        if (zstegStatusLabel) zstegStatusLabel.innerText = 'Tarama durduruldu.';
+    });
+}
+
+// Bulunan bir kombinasyonun tam akışını dışa aktar
+if (tbodyZstegResults) {
+    tbodyZstegResults.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.btn-zsteg-export');
+        if (!btn || !currentZstegImageData) return;
+
+        const comboId = btn.dataset.combo;
+        const ext = btn.dataset.ext || 'bin';
+
+        try {
+            showStatus(`${comboId} kombinasyonundan tam akış çıkarılıyor...`);
+            btn.disabled = true;
+
+            const pixelBuffer = currentZstegImageData.data.buffer.slice(0);
+            const width = currentZstegImageData.width;
+            const height = currentZstegImageData.height;
+
+            const payloadBytes = await StegoWorkerClient.extractZstegPayload({
+                pixelBuffer,
+                width,
+                height,
+                comboId,
+                maxBytes: 1048576 // 1 MB
+            });
+
+            const blob = new Blob([payloadBytes], { type: 'application/octet-stream' });
+            const sanitizedName = `zsteg_${comboId.replace(/,/g, '_')}.${ext}`;
+            downloadBlob(blob, sanitizedName);
+            showStatus(`✅ ${sanitizedName} başarıyla indirildi (${payloadBytes.length.toLocaleString()} bayt)!`);
+        } catch (err) {
+            showStatus("Akış çıkarma hatası: " + err.message, true);
+        } finally {
+            btn.disabled = false;
+        }
+    });
+}
+
 // ---------- QR KOD ÜRETİCİ & TARAYICI İŞLEMLERİ ----------
 if (btnShowQr) {
     btnShowQr.addEventListener('click', () => {
@@ -1558,14 +1764,55 @@ async function handleQrScanFile(file) {
 if (fileQrScan) fileQrScan.addEventListener('change', (e) => handleQrScanFile(e.target.files[0]));
 if (dropzoneQrScan) setupDropzone(dropzoneQrScan, handleQrScanFile);
 
-// ---------- Service Worker Kaydı ----------
-if ('serviceWorker' in navigator) {
+// ---------- Service Worker Kaydı & Kullanıcı Onaylı Güncelleme ----------
+const bannerPwaUpdate = document.getElementById('banner-pwa-update');
+const btnPwaReload = document.getElementById('btn-pwa-reload');
+
+function setupServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
+        let refreshing = false;
+        const initialController = navigator.serviceWorker.controller;
+
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+            if (reg.waiting) {
+                showPwaUpdatePrompt(reg.waiting);
+            }
+
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                if (!newWorker) return;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showPwaUpdatePrompt(newWorker);
+                    }
+                });
+            });
+        }).catch((err) => {
             console.error('ServiceWorker kayıt hatası: ', err);
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing && initialController) {
+                refreshing = true;
+                window.location.reload();
+            }
         });
     });
 }
+
+function showPwaUpdatePrompt(waitingWorker) {
+    if (!bannerPwaUpdate) return;
+    bannerPwaUpdate.style.display = 'flex';
+    if (btnPwaReload) {
+        btnPwaReload.onclick = () => {
+            waitingWorker.postMessage({ action: 'SKIP_WAITING' });
+        };
+    }
+}
+
+setupServiceWorker();
 
 // ---------- Başlangıç & Bütünlük Kontrolleri ----------
 const canvasCheck = ImageEngine.verifyCanvasIntegrity();

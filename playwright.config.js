@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'node:fs';
+
+const localChromium = !process.env.CI && fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -14,7 +17,7 @@ export default defineConfig({
     baseURL: 'http://localhost:8080',
     headless: true,
     launchOptions: {
-      executablePath: '/usr/bin/chromium',
+      ...(localChromium ? { executablePath: localChromium } : {}),
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
   },

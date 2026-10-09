@@ -406,6 +406,15 @@
         </span>
     </div>
 
+    <!-- PWA Güncelleme Bildirim Çubuğu -->
+    <div id="banner-pwa-update" class="m3-banner" style="display: none; background: var(--md-primary-container); color: var(--md-on-primary-container); border: 1px solid var(--md-primary); margin-bottom: 16px; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.2rem;">🚀</span>
+            <span style="font-size: 0.82rem; font-weight: 600;">StegoCrypt'in yeni sürümü hazır!</span>
+        </div>
+        <button type="button" class="m3-btn" id="btn-pwa-reload" style="width: auto; padding: 6px 14px; font-size: 0.78rem; border-radius: 8px; margin: 0;">Yenile & Güncelle</button>
+    </div>
+
     <nav class="m3-segmented-button">
         <button class="m3-segment-btn active" id="btn-tab-hide">İçerik Gizle</button>
         <button class="m3-segment-btn" id="btn-tab-reveal">İçerik Çöz</button>
@@ -664,6 +673,7 @@
             <button type="button" class="m3-sub-tab-btn" id="btn-subtab-binary">📦 İkili Yapı Triyajı</button>
             <button type="button" class="m3-sub-tab-btn" id="btn-subtab-diff">⚖️ Görsel Diff (PSNR)</button>
             <button type="button" class="m3-sub-tab-btn" id="btn-subtab-zerowidth">👻 Görünmez Metin</button>
+            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-zsteg" style="grid-column: span 2;">🕵️ zsteg Derin Tarama (56 Kombinasyon)</button>
         </div>
 
         <!-- 3.A LSB & STEGANALİZ SUBTAB -->
@@ -940,6 +950,67 @@
                     <label>🧹 Temizlenmiş Metin (Görünmez Karakterlerden Arındırılmış)</label>
                     <textarea id="text-zerowidth-clean" readonly style="min-height: 60px;"></textarea>
                     <button type="button" class="m3-btn m3-btn-tonal" id="btn-copy-clean-text" style="margin-top: 8px;">📋 Temizlenmiş Metni Kopyala</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3.E zsteg DERİN TARAMA (56 KOMBİNASYON) SUBTAB -->
+        <div id="subtab-content-zsteg" class="subtab-content">
+            <div class="m3-banner">
+                <span style="font-size: 1.2rem;">🕵️</span>
+                <span><b>zsteg</b> tarzı 56-kombinasyon derin bit düzlemi tarayıcısı. Kanallar (R, G, B, RGB, BGR, RGBA, ABGR), 1b/2b derinlik, LSB/MSB ve XY/YX yönlerinde dosya imzalarını (ZIP, PDF, PNG, JPEG, GIF vb.), CTF bayraklarını (<code>flag{...}</code>, <code>ctf{...}</code>) ve açık metinleri arar.</span>
+            </div>
+
+            <div class="m3-field">
+                <label>Taranacak Görsel</label>
+                <div class="m3-dropzone" id="dropzone-zsteg">
+                    <p id="label-zsteg-file">🔍 Görseli buraya sürükleyin veya seçin (PNG / BMP / WebP)</p>
+                    <input type="file" id="file-zsteg" accept="image/*,.heic,.heif" aria-label="zsteg ile taranacak görseli seçin">
+                    <img id="preview-zsteg" class="preview-img" alt="zsteg Önizleme" style="max-height: 120px;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <button type="button" class="m3-btn" id="btn-start-zsteg" style="flex: 1;">🔍 56 Kombinasyonu Derinlemesine Tara</button>
+                <button type="button" class="m3-btn m3-btn-tonal" id="btn-stop-zsteg" style="display: none; width: auto; padding: 12px 18px; margin: 0; background: var(--md-error-container); color: var(--md-on-error); border-color: var(--md-error);">⏹️ Durdur</button>
+            </div>
+
+            <!-- İlerleme Çubuğu & Durum -->
+            <div id="container-zsteg-progress" style="display: none; margin-bottom: 16px; background: var(--md-surface-dim); border-radius: 12px; padding: 12px; border: 1px solid var(--md-outline-variant);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span id="zsteg-status-label" style="font-size: 0.78rem; font-weight: 600; color: var(--md-primary);">Tarama hazırlanıyor...</span>
+                    <span id="zsteg-pct-label" style="font-size: 0.78rem; font-weight: 700; color: var(--md-on-surface);">%0</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: var(--md-surface-container-highest); border-radius: 4px; overflow: hidden;">
+                    <div id="zsteg-progress-bar" style="width: 0%; height: 100%; background: var(--md-primary); border-radius: 4px; transition: width 0.15s ease;"></div>
+                </div>
+            </div>
+
+            <!-- Sonuç Tablosu -->
+            <div id="container-zsteg-results" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="font-size: 0.85rem; color: var(--md-primary); margin: 0;">📋 Bulunan Olası Stego / Dosya Akışları</h4>
+                    <span id="zsteg-findings-count" style="font-size: 0.75rem; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 2px 8px; border-radius: 100px;">0 Bulgu</span>
+                </div>
+
+                <div id="zsteg-empty-state" style="display: none; text-align: center; padding: 24px 16px; background: var(--md-surface-dim); border-radius: 12px; border: 1px solid var(--md-outline-variant); color: var(--md-on-surface-variant); font-size: 0.8rem;">
+                    🛡️ İncelenen 56 kombinasyonun hiçbirinde bilinen dosya imzası veya belirgin metin kalıbı bulunamadı.
+                </div>
+
+                <div id="zsteg-table-wrapper" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--md-outline-variant); border-radius: 10px; background: var(--md-surface-dim);">
+                    <table class="forensic-table" id="table-zsteg-results">
+                        <thead>
+                            <tr>
+                                <th>Kombinasyon</th>
+                                <th>Tip</th>
+                                <th>Önizleme / Detay</th>
+                                <th>İtibar</th>
+                                <th>İndir</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-zsteg-results">
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

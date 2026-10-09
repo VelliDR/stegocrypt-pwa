@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stegocrypt-v7';
+const CACHE_NAME = 'stegocrypt-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,11 @@ const ASSETS = [
   './js/SteganalysisEngine.js',
   './js/StegoEngine.js',
   './js/ImageEngine.js',
+  './js/AdaptiveEngine.js',
+  './js/BinaryInspector.js',
+  './js/DiffEngine.js',
+  './js/ZeroWidthDetector.js',
+  './js/ZstegScanner.js',
   './js/ZeroWidthEngine.js',
   './js/QREngine.js',
   './js/StegoWorkerClient.js',
@@ -23,10 +28,15 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.action === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (e) => {

@@ -7,13 +7,13 @@
 ### İstemci Taraflı İstatistiksel Dirençli Steganografi, Kriptografi & Adli Bilişim Platformu
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests: Passing](https://img.shields.io/badge/Tests-56%20Unit%20%7C%2014%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
-[![PWA Ready](https://img.shields.io/badge/PWA-100%25%20Offline-brightgreen.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
+[![Tests: Passing](https://img.shields.io/badge/Tests-61%20Unit%20%7C%2016%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
+[![PWA Ready](https://img.shields.io/badge/PWA-100%25%20Offline%20%7C%20v8-brightgreen.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Security: AES-256-GCM](https://img.shields.io/badge/Security-AES--256--GCM-success.svg)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
 [![KDF: PBKDF2-SHA256](https://img.shields.io/badge/KDF-PBKDF2--100k%2F600k-orange.svg)](https://en.wikipedia.org/wiki/PBKDF2)
 [![Zero-Server](https://img.shields.io/badge/Privacy-100%25%20Client--Side-purple.svg)](#-gizlilik-ve-tehdit-modeli)
 
-*Görsellerde en önemsiz bit (LSB) manipülasyonu, istatistiksel dağıtım, χ² steganaliz röntgeni ve görünmez metin şifreleme.*
+*Görsellerde en önemsiz bit (LSB) manipülasyonu, istatistiksel dağıtım, χ² steganaliz röntgeni, zsteg 56-kombinasyon derin tarama ve görünmez metin şifreleme.*
 
 </div>
 
@@ -118,17 +118,23 @@ Uygulamanın **🔬 Steganaliz & Triyaj** sekmesi 4 entegre adli bilişim aracı
 * **BiDi Truva Atı Uyarısı:** Right-to-Left Override (`U+202E`, RLO) ve yönlendirme bayraklarını yakalayarak uzantı/kod gizleme saldırılarını ifşa eder.
 * **Unicode Düzlem 14 ASCII Smuggling:** ChatGPT, LLM ve güvenlik filtrelerini atlatmak için kullanılan Unicode Tag (`\u{E0000}..\u{E007F}`) etiketlerini yakalar, gizlenen ASCII yükünü anında deşifre eder ve metni tüm görünmez parazitlerden arındırır.
 
+### 5. 🕵️ zsteg Tarzı 56-Kombinasyon Derin Bit Düzlemi Tarayıcısı (ZstegScanner)
+* **CTF ve Adli Analiz Standardı:** `zsteg` aracının modern istemci-taraflı Web Worker uygulaması.
+* **56 Farklı Kombinasyon:** 7 renk kanalı (`r`, `g`, `b`, `rgb`, `bgr`, `rgba`, `abgr`), 2 bit derinliği (`1b`, `2b`), 2 bit sırası (`lsb`, `msb`) ve 2 piksel yönü (`xy`, `yx`).
+* **Otomatik İmza & Bayrak Tespiti:** ZIP, PDF, PNG, JPEG, GIF, 7z, RAR, ELF, MZ/PE, `flag{...}` / `ctf{...}` regex kalıpları, JSON nesneleri ve basılabilir metin (%85+ ASCII).
+* **Tek Tıkla Akış İndirme (Payload Export):** Herhangi bir şüpheli kombinasyonun tüm veri akışını tarayıcıda doğrudan dosya olarak indirme.
+
 ---
 
 ## 🧪 Test ve Doğrulama
 
-Proje, hem Node.js yerel test ortamında birim testleriyle hem de Playwright ile gerçek Chromium tarayıcısında uçtan uca (E2E) test edilmektedir.
+Proje, hem Node.js yerel test ortamında birim testleriyle hem de Playwright ile gerçek Chromium tarayıcısında uçtan uca (E2E) test edilmektedir. Ayrıca GitHub Actions üzerinde **Node.js 20 ve 22** matrisinde otomatik CI işletilmektedir.
 
 ```bash
 # Bağımlılıkları yükleyin
 npm install
 
-# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient, Matching & RS, BinaryInspector, DiffEngine, ZeroWidthDetector)
+# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient, Matching & RS, BinaryInspector, DiffEngine, ZeroWidthDetector, ZstegScanner)
 npm run test:unit
 
 # 2. Tarayıcı Uçtan Uca (E2E) Testleri (Playwright + Chromium)
@@ -136,8 +142,8 @@ npm run test:e2e
 ```
 
 **Mevcut Test Durumu:**
-- **56 / 56** Birim Testi Başarılı (`node:test`, ~1050 ms, %100 Başarı)
-- **14 / 14** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact, LSB Matching & RS analizi, İçerik Duyarlı Doku Kafesi & Stego Risk İndeksi, Binary Inspector & Overlay Injection, Diff Engine & PSNR/SSIM, Zero-Width & Unicode Plane 14 ASCII Smuggling)
+- **61 / 61** Birim Testi Başarılı (`node:test`, ~1050 ms, %100 Başarı)
+- **16 / 16** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact, LSB Matching & RS analizi, İçerik Duyarlı Doku Kafesi & Stego Risk İndeksi, Binary Inspector & Overlay Injection, Diff Engine & PSNR/SSIM, Zero-Width & Unicode Plane 14 ASCII Smuggling, zsteg 56-Kombinasyon Taraması & Yük İndirme, PWA Service Worker Cache & Güncelleme Çubuğu)
 
 ---
 

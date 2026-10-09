@@ -173,3 +173,36 @@ Metin tabanlı adli inceleme modülü:
      $$\text{Char} = \text{String.fromCharCode}(cp - \text{0xE0000})$$
    - Kaçırılan gizli ASCII istemi/yükü anında deşifre edilerek ekrana dökülür; metin tüm görünmez parazitlerden arındırılarak temiz haliyle sunulur.
 
+---
+
+## 7. Faz 6: zsteg Tarzı 56-Kombinasyon Derin Adli Bit Düzlemi Taraması
+
+Faz 6, CTF yarışmalarında ve adli bilişim incelemelerinde standart kabul edilen `zsteg` aracının web tabanlı, istemci-taraflı sıfır-kopyalama motorudur (`ZstegScanner.js`).
+
+### 7.1 Kombinasyon Uzayı (56 Kombinasyon)
+Görsel pikselleri aşağıdaki 4 boyutlu kartezyen uzayda ayrıştırılır:
+- **Kanal Grupları (7):** `r` (kırmızı), `g` (yeşil), `b` (mavi), `rgb`, `bgr`, `rgba`, `abgr`
+- **Bit Derinliği (2):** `1b` (1-bit), `2b` (2-bit)
+- **Bit Sıralaması (2):** `lsb` (Least Significant Bit First), `msb` (Most Significant Bit First)
+- **Piksel Tarama Yönü (2):** `xy` (satır satır / row-major), `yx` (sütun sütun / column-major)
+
+$$\text{Toplam Kombinasyon} = 7 \times 2 \times 2 \times 2 = 56$$
+
+### 7.2 Hızlı Örnekleme ve Sezgiseller (Heuristics)
+Her kombinasyon için ilk $S = 2048$ bayt çıkarılarak aşağıdaki sezgisel motorlardan geçirilir ($O(1)$ sürede tamamlanır):
+1. **Sihirli Başlıklar (Magic Signatures):**
+   - ZIP (`PK\x03\x04`), PDF (`%PDF-`), PNG (`\x89PNG\r\n\x1a\n`), JPEG (`\xFF\xD8\xFF`), GIF (`GIF87a`/`GIF89a`)
+   - 7z (`7z\xBC\xAF\x27\x1C`), RAR (`Rar!\x1A\x07`), GZIP (`\x1F\x8B`), BZIP2 (`BZh`), BMP (`BM`)
+   - StegoCrypt formatları (`STG1`, `STG2`), ELF (`\x7FELF`), PE/DOS (`MZ`)
+2. **CTF Bayrak Sezgisi (Flag Heuristics):**
+   - Regex: `/(?:flag|ctf|cyber|stego|key|secret)\{[a-zA-Z0-9_\-\.\!@#$%^&*+=<>?|~]+\}/i`
+   - Doğrudan açık metin eşleşmesi yakalanır ve önizlemede sunulur.
+3. **JSON ve Yapılandırılmış Veri:**
+   - Ön ek `{` veya `[` ile başlayıp `key:value` kalıbı taşıyan akışlar.
+4. **Basılabilir ASCII / Metin Analizi:**
+   - İlk 64 baytta basılabilir karakter oranı $\ge \%85$ olan ve ilk 12 baytında null byte bulunmayan akışlar.
+
+### 7.3 Doğrudan Yük Çıkarma (Payload Extraction)
+Seçilen kombinasyon için tüm görsel akışı `extractPayload(imageData, comboId, maxBytes)` fonksiyonu ile talep edildiğinde çıkarılır ve Blob olarak tarayıcı üzerinden anında indirilir.
+
+

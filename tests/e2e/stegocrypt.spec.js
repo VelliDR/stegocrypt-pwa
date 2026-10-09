@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { PngCodec } from '../../js/png/PngCodec.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(__dirname, '../fixtures');
@@ -540,6 +541,82 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
 
         // Verify Cleaned Text output
         await expect(page.locator('#text-zerowidth-clean')).toHaveValue('Prompt: Summarize this text.');
+    });
+
+    test('14. Phase 6 - zsteg 56-Combination Deep Scanner & Payload Extraction', async ({ page }) => {
+        await page.goto('/');
+
+        // 1. Generate a test PNG with an embedded CTF flag in b,1b,lsb,xy
+        const width = 64;
+        const height = 64;
+        const pixelBuffer = new Uint8ClampedArray(width * height * 4).fill(128);
+        const secretFlag = 'flag{stegocrypt_zsteg_e2e_pass_2026}\n';
+        const flagBytes = new TextEncoder().encode(secretFlag);
+        for (let i = 0; i < flagBytes.length; i++) {
+            const b = flagBytes[i];
+            for (let bit = 0; bit < 8; bit++) {
+                const bitVal = (b >> bit) & 1;
+                const pxIdx = i * 8 + bit;
+                pixelBuffer[pxIdx * 4 + 2] = (pixelBuffer[pxIdx * 4 + 2] & 0xFE) | bitVal; // Blue channel LSB
+            }
+        }
+
+        const pngBytes = await PngCodec.encode({ width, height, data: pixelBuffer });
+        const testPngPath = path.join(fixturesDir, 'zsteg_flag_carrier.png');
+        fs.writeFileSync(testPngPath, Buffer.from(pngBytes));
+
+        try {
+            // 2. Switch to Inspect Tab and zsteg Subtab
+            await page.locator('#btn-tab-inspect').click();
+            await page.locator('#btn-subtab-zsteg').click();
+
+            // 3. Upload test image
+            await page.locator('#file-zsteg').setInputFiles(testPngPath);
+            await expect(page.locator('#label-zsteg-file')).toContainText('zsteg_flag_carrier.png');
+
+            // 4. Click Start Scan
+            await page.locator('#btn-start-zsteg').click();
+
+            // 5. Wait for scan completion and results table
+            await expect(page.locator('#container-zsteg-results')).toBeVisible({ timeout: 15000 });
+            await expect(page.locator('#zsteg-findings-count')).not.toHaveText('0 Bulgu');
+
+            // 6. Find row for b,1b,lsb,xy
+            const flagRow = page.locator('#tbody-zsteg-results tr').filter({ hasText: 'b,1b,lsb,xy' });
+            await expect(flagRow).toBeVisible();
+            await expect(flagRow).toContainText('flag{stegocrypt_zsteg_e2e_pass_2026}');
+
+            // 7. Click Download button for that combo
+            const exportBtn = flagRow.locator('.btn-zsteg-export');
+            const downloadPromise = page.waitForEvent('download');
+            await exportBtn.click();
+            const download = await downloadPromise;
+
+            const downloadedPath = await download.path();
+            expect(fs.existsSync(downloadedPath)).toBe(true);
+            const downloadedContent = fs.readFileSync(downloadedPath, 'utf-8');
+            expect(downloadedContent).toContain('flag{stegocrypt_zsteg_e2e_pass_2026}');
+        } finally {
+            if (fs.existsSync(testPngPath)) fs.unlinkSync(testPngPath);
+        }
+    });
+
+    test('15. Phase 6 - PWA Service Worker Cache & Update Banner Readiness', async ({ page }) => {
+        await page.goto('/');
+
+        // Verify service worker registration is active
+        const swRegistered = await page.evaluate(async () => {
+            if (!('serviceWorker' in navigator)) return false;
+            const reg = await navigator.serviceWorker.getRegistration();
+            return !!reg;
+        });
+        expect(swRegistered).toBe(true);
+
+        // Verify PWA update elements exist in DOM
+        const bannerPwaUpdate = page.locator('#banner-pwa-update');
+        await expect(bannerPwaUpdate).toBeAttached();
+        const btnPwaReload = page.locator('#btn-pwa-reload');
+        await expect(btnPwaReload).toBeAttached();
     });
 });
 

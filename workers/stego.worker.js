@@ -14,6 +14,7 @@ import { AdaptiveEngine } from '../js/AdaptiveEngine.js';
 import { BinaryInspector } from '../js/BinaryInspector.js';
 import { DiffEngine } from '../js/DiffEngine.js';
 import { ZeroWidthDetector } from '../js/ZeroWidthDetector.js';
+import { ZstegScanner } from '../js/ZstegScanner.js';
 
 function sendProgress(id, percent, text) {
     self.postMessage({ type: 'PROGRESS', id, percent, text });
@@ -322,6 +323,62 @@ self.onmessage = async (e) => {
                 id,
                 result: { analysis }
             });
+
+        } else if (action === 'SCAN_ZSTEG') {
+            // data: { pixelBuffer, width, height, maxSampleBytes }
+            const { pixelBuffer, width, height } = data;
+            const maxSampleBytes = data.maxSampleBytes || 2048;
+            const imageData = {
+                width,
+                height,
+                data: new Uint8ClampedArray(pixelBuffer)
+            };
+
+            const findings = ZstegScanner.scan(imageData, {
+                maxSampleBytes,
+                onProgress: (percent, currentCombo, foundCount) => {
+                    sendProgress(id, percent, `${currentCombo} taranıyor... (${foundCount} bulgu)`);
+                }
+            });
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        findings,
+                        pixelBuffer,
+                        width,
+                        height
+                    }
+                },
+                [pixelBuffer]
+            );
+
+        } else if (action === 'EXTRACT_ZSTEG_PAYLOAD') {
+            // data: { pixelBuffer, width, height, comboId, maxBytes }
+            const { pixelBuffer, width, height, comboId, maxBytes } = data;
+            const imageData = {
+                width,
+                height,
+                data: new Uint8ClampedArray(pixelBuffer)
+            };
+
+            sendProgress(id, 40, `${comboId} akışı tam olarak çıkarılıyor...`);
+            const payload = ZstegScanner.extractPayload(imageData, comboId, maxBytes || 1048576);
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        payloadBuffer: payload.buffer,
+                        pixelBuffer,
+                        comboId
+                    }
+                },
+                [payload.buffer, pixelBuffer]
+            );
 
         } else {
             throw new Error(`Bilinmeyen iş parçacığı eylemi: ${action}`);

@@ -175,3 +175,48 @@ test('StegoWorkerClient - inspectBinary, compareImages, and analyzeText via clie
     assert.equal(textAnalysis.hasZeroWidth, true);
     assert.equal(textAnalysis.cleanedText, "TestText");
 });
+
+test('StegoWorkerClient - scanZsteg and extractZstegPayload via client', async () => {
+    const width = 32;
+    const height = 32;
+    const pixelBuffer = new Uint8ClampedArray(width * height * 4).fill(128);
+
+    // Embed flag{worker_test_123} into r,1b,lsb,xy
+    const flagStr = "flag{worker_test_123}\n";
+    const flagBytes = new TextEncoder().encode(flagStr);
+    for (let i = 0; i < flagBytes.length; i++) {
+        const b = flagBytes[i];
+        for (let bit = 0; bit < 8; bit++) {
+            const bitVal = (b >> bit) & 1;
+            const pxIdx = i * 8 + bit;
+            pixelBuffer[pxIdx * 4] = (pixelBuffer[pxIdx * 4] & 0xFE) | bitVal;
+        }
+    }
+
+    let progressCalled = false;
+    const findings = await StegoWorkerClient.scanZsteg({
+        pixelBuffer: pixelBuffer.buffer,
+        width,
+        height,
+        onProgress: () => { progressCalled = true; }
+    });
+
+    assert.ok(Array.isArray(findings));
+    assert.ok(findings.length > 0);
+    const flagFinding = findings.find(f => f.type === 'flag' && f.comboId === 'r,1b,lsb,xy');
+    assert.ok(flagFinding, "r,1b,lsb,xy kombinasyonunda bayrak tespit edilmeli");
+    assert.equal(flagFinding.preview, "flag{worker_test_123}");
+    assert.ok(progressCalled);
+
+    // Payload extraction via client
+    const extracted = await StegoWorkerClient.extractZstegPayload({
+        pixelBuffer: pixelBuffer.buffer,
+        width,
+        height,
+        comboId: 'r,1b,lsb,xy',
+        maxBytes: 64
+    });
+    assert.ok(extracted instanceof Uint8Array);
+    const text = new TextDecoder().decode(extracted);
+    assert.ok(text.startsWith("flag{worker_test_123}"));
+});
