@@ -202,7 +202,7 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
         await expect(page.locator('#text-reveal')).toHaveValue(realText);
     });
 
-    test('6. Steganalysis Tab - Natural vs Stego Detection', async ({ page }) => {
+    test('6. Steganalysis Tab - Natural vs Stego Detection, RS Analysis and Heatmap', async ({ page }) => {
         await page.goto('/');
         await page.locator('#btn-tab-inspect').click();
 
@@ -213,9 +213,24 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
         await expect(page.locator('#inspect-controls')).toBeVisible();
         await expect(page.locator('#inspect-verdict')).toContainText(/Temiz|Doğal/i);
 
-        // Bit-plane canvas should be rendered
+        // 2. Fridrich RS Steganalysis card verification
+        await expect(page.locator('#inspect-rs-report')).toBeVisible();
+        await expect(page.locator('#inspect-rs-badge')).toBeVisible();
+        await expect(page.locator('#inspect-rs-verdict')).toContainText(/Temiz|Düşük/i);
+
+        // 3. Bit-plane canvas should be rendered
         const canvas = page.locator('#canvas-inspect');
         await expect(canvas).toBeVisible();
+
+        // 4. View Mode toggle: Heatmap vs Bit Plane
+        const labelEl = page.locator('#inspect-canvas-label');
+        await expect(labelEl).toContainText(/Bit Düzlemi/i);
+
+        await page.locator('#view-mode-heatmap').click();
+        await expect(labelEl).toContainText(/Isı Haritası/i);
+
+        await page.locator('#view-mode-bitplane').click();
+        await expect(labelEl).toContainText(/Bit Düzlemi/i);
     });
 
     test('7. Zero-Width Invisible Text Roundtrip', async ({ page }) => {
@@ -279,6 +294,53 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
         }
 
         // Reveal tab roundtrip
+        await page.locator('#btn-tab-reveal').click();
+        await page.locator('#file-reveal').setInputFiles(downloadPath);
+        await page.locator('#pass-reveal').fill(password);
+        await page.locator('#btn-decrypt').click();
+
+        const outputArea = page.locator('#text-reveal');
+        await expect(outputArea).toBeVisible();
+        await expect(outputArea).toHaveValue(secretText);
+    });
+
+    test('9. Phase 3 - LSB Matching (±1) Toggle, Roundtrip & RS Immunity Verification', async ({ page }) => {
+        await page.goto('/');
+
+        const carrierPath = path.join(fixturesDir, 'opaque_carrier.png');
+        await page.locator('#file-hide').setInputFiles(carrierPath);
+
+        // Verify LSB Matching is selected by default
+        const matchingRadio = page.locator('#method-matching');
+        await expect(matchingRadio).toBeChecked();
+
+        const secretText = 'Faz 3 LSB Matching (±1) ve Fridrich RS Doğrulama Testi!';
+        const password = 'Phase3MatchingPassword#2026';
+
+        await page.locator('#text-hide').fill(secretText);
+        await page.locator('#pass-hide').fill(password);
+
+        // Click Hide
+        await page.locator('#btn-encrypt').click();
+
+        const btnShare = page.locator('#btn-share');
+        await expect(btnShare).toBeVisible();
+
+        const downloadPromise = page.waitForEvent('download');
+        await btnShare.click();
+        const download = await downloadPromise;
+        const downloadPath = await download.path();
+
+        // 1. Inspect tab: verify RS Steganalysis on LSB Matching stego image
+        await page.locator('#btn-tab-inspect').click();
+        await page.locator('#file-inspect').setInputFiles(downloadPath);
+
+        await expect(page.locator('#inspect-controls')).toBeVisible();
+        await expect(page.locator('#inspect-rs-report')).toBeVisible();
+        // LSB matching maintains symmetry, so RS verdict should show low/clean detection
+        await expect(page.locator('#inspect-rs-verdict')).toContainText(/Temiz|Düşük/i);
+
+        // 2. Reveal tab: verify exact roundtrip decodability
         await page.locator('#btn-tab-reveal').click();
         await page.locator('#file-reveal').setInputFiles(downloadPath);
         await page.locator('#pass-reveal').fill(password);

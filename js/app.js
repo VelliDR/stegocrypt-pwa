@@ -50,6 +50,10 @@ const scatterModePrngRadio = document.getElementById('scatter-mode-prng');
 const scatterModeSeqRadio = document.getElementById('scatter-mode-seq');
 const containerScatterInput = document.getElementById('container-scatter-input');
 
+const methodMatchingRadio = document.getElementById('method-matching');
+const methodReplacementRadio = document.getElementById('method-replacement');
+const containerMethodInput = document.getElementById('container-method-input');
+
 const checkDeniable = document.getElementById('check-deniable');
 const containerDeniableToggle = document.getElementById('container-deniable-toggle');
 const containerDeniableFields = document.getElementById('container-deniable-fields');
@@ -95,14 +99,25 @@ const dropzoneHide = document.getElementById('dropzone-hide');
 const dropzoneReveal = document.getElementById('dropzone-reveal');
 
 // Steganaliz Elemanları
+let currentInspectHeatmapData = null;
 const dropzoneInspect = document.getElementById('dropzone-inspect');
 const fileInspectInput = document.getElementById('file-inspect');
 const inspectControls = document.getElementById('inspect-controls');
 const canvasInspect = document.getElementById('canvas-inspect');
+const inspectCanvasLabel = document.getElementById('inspect-canvas-label');
+const viewModeBitplaneRadio = document.getElementById('view-mode-bitplane');
+const viewModeHeatmapRadio = document.getElementById('view-mode-heatmap');
+const containerInspectChannel = document.getElementById('container-inspect-channel');
+
 const inspectProbBadge = document.getElementById('inspect-prob-badge');
 const inspectVerdict = document.getElementById('inspect-verdict');
 const inspectDetails = document.getElementById('inspect-details');
 const inspectStats = document.getElementById('inspect-stats');
+
+const inspectRsBadge = document.getElementById('inspect-rs-badge');
+const inspectRsVerdict = document.getElementById('inspect-rs-verdict');
+const inspectRsDetails = document.getElementById('inspect-rs-details');
+const inspectRsStats = document.getElementById('inspect-rs-stats');
 
 const inspectChanAll = document.getElementById('inspect-chan-all');
 const inspectChanRed = document.getElementById('inspect-chan-red');
@@ -173,6 +188,10 @@ function setPreviewImage(imgElement, file) {
 
 function getLsbMode() {
     return density2lsbRadio && density2lsbRadio.checked ? 2 : 1;
+}
+
+function getEmbedMethod() {
+    return methodReplacementRadio && methodReplacementRadio.checked ? 'replacement' : 'matching';
 }
 
 function isScatteredMode() {
@@ -248,6 +267,7 @@ function updateHideModeUI() {
         containerImageInput.style.display = 'block';
         if (containerDensityInput) containerDensityInput.style.display = 'block';
         if (containerScatterInput) containerScatterInput.style.display = 'block';
+        if (containerMethodInput) containerMethodInput.style.display = 'block';
         if (containerDeniableToggle) containerDeniableToggle.style.display = 'block';
         if (containerDeniableFields) containerDeniableFields.style.display = checkDeniable?.checked ? 'block' : 'none';
         containerTextInput.style.display = 'block';
@@ -259,6 +279,7 @@ function updateHideModeUI() {
         containerImageInput.style.display = 'block';
         if (containerDensityInput) containerDensityInput.style.display = 'block';
         if (containerScatterInput) containerScatterInput.style.display = 'block';
+        if (containerMethodInput) containerMethodInput.style.display = 'block';
         if (containerDeniableToggle) containerDeniableToggle.style.display = 'block';
         if (containerDeniableFields) containerDeniableFields.style.display = checkDeniable?.checked ? 'block' : 'none';
         containerTextInput.style.display = 'none';
@@ -270,6 +291,7 @@ function updateHideModeUI() {
         containerImageInput.style.display = 'none';
         if (containerDensityInput) containerDensityInput.style.display = 'none';
         if (containerScatterInput) containerScatterInput.style.display = 'none';
+        if (containerMethodInput) containerMethodInput.style.display = 'none';
         if (containerDeniableToggle) containerDeniableToggle.style.display = 'none';
         if (containerDeniableFields) containerDeniableFields.style.display = 'none';
         containerTextInput.style.display = 'block';
@@ -391,6 +413,7 @@ btnEncrypt.addEventListener('click', async () => {
     const lsbMode = isInvisibleMode ? 1 : getLsbMode();
     const useScatter = !isInvisibleMode && isScatteredMode();
     const deniableActive = isDeniableMode();
+    const embedMethod = getEmbedMethod();
     let rawBufferToEncrypt = null;
 
     try {
@@ -474,6 +497,7 @@ btnEncrypt.addEventListener('click', async () => {
                 rawBuffer: rawBufferToEncrypt,
                 pass,
                 lsbMode,
+                method: embedMethod,
                 isDeniable: true,
                 rawDecoy,
                 passDecoy,
@@ -504,6 +528,7 @@ btnEncrypt.addEventListener('click', async () => {
                 rawBuffer: rawBufferToEncrypt,
                 pass,
                 lsbMode,
+                method: embedMethod,
                 isDeniable: false,
                 onProgress: (percent, text) => showStatus(text)
             });
@@ -523,7 +548,7 @@ btnEncrypt.addEventListener('click', async () => {
 
             showStatus(`Sıralı piksellere gömülüyor (${lsbMode}-LSB)...`);
             const payload = await CryptoEngine.encryptBuffer(rawBufferToEncrypt, pass, lsbMode);
-            StegoEngine.embedSequential(currentHideCanvasData.imageData, payload, lsbMode);
+            StegoEngine.embedSequential(currentHideCanvasData.imageData, payload, lsbMode, embedMethod);
             currentHideCanvasData.ctx.putImageData(currentHideCanvasData.imageData, 0, 0);
 
             // Saf deterministik PNG ile dışa aktar
@@ -850,10 +875,45 @@ async function updateInspectBitPlane() {
     ctx.putImageData(imgData, 0, 0);
 }
 
+async function updateInspectHeatmap() {
+    if (!currentInspectImageData || !canvasInspect) return;
+    if (!currentInspectHeatmapData) {
+        showStatus("χ² Bölgesel ısı haritası hesaplanıyor...");
+        currentInspectHeatmapData = await StegoWorkerClient.renderHeatmap({
+            pixelBuffer: currentInspectImageData.data.buffer,
+            width: currentInspectImageData.width,
+            height: currentInspectImageData.height,
+            blockSize: 32
+        });
+        hideStatus();
+    }
+    canvasInspect.width = currentInspectHeatmapData.width;
+    canvasInspect.height = currentInspectHeatmapData.height;
+    const ctx = canvasInspect.getContext('2d');
+    const imgData = ctx.createImageData(currentInspectHeatmapData.width, currentInspectHeatmapData.height);
+    imgData.data.set(currentInspectHeatmapData.data);
+    ctx.putImageData(imgData, 0, 0);
+}
+
+async function updateInspectView() {
+    if (!currentInspectImageData || !canvasInspect) return;
+    const isHeatmap = viewModeHeatmapRadio && viewModeHeatmapRadio.checked;
+    if (isHeatmap) {
+        if (inspectCanvasLabel) inspectCanvasLabel.innerText = "χ² Bölgesel Isı Haritası (32x32 Bloklar)";
+        if (containerInspectChannel) containerInspectChannel.style.opacity = '0.4';
+        await updateInspectHeatmap();
+    } else {
+        if (inspectCanvasLabel) inspectCanvasLabel.innerText = "LSB Bit Düzlemi Röntgeni (Bit 0)";
+        if (containerInspectChannel) containerInspectChannel.style.opacity = '1.0';
+        await updateInspectBitPlane();
+    }
+}
+
 async function processInspectFile(file) {
     if (!file) return;
     try {
         showStatus("Görsel taranıyor ve steganaliz yapılıyor...");
+        currentInspectHeatmapData = null; // Önbelleği sıfırla
         let imgData = null;
         const isPng = file.type === 'image/png' || (file.name && /\.png$/i.test(file.name));
         if (isPng) {
@@ -876,21 +936,21 @@ async function processInspectFile(file) {
         }
         currentInspectImageData = imgData;
 
-        // 1. Bit Düzlemi çiz
-        await updateInspectBitPlane();
+        // 1. Görünümü güncelle (Bit-Plane veya Isı Haritası)
+        await updateInspectView();
 
         // 2. Chi-Square testi
-        const result = await StegoWorkerClient.analyzeChiSquare({
+        const resultChi = await StegoWorkerClient.analyzeChiSquare({
             pixelBuffer: currentInspectImageData.data.buffer,
             width: currentInspectImageData.width,
             height: currentInspectImageData.height,
             onProgress: (percent, msg) => showStatus(msg)
         });
-        inspectProbBadge.innerText = `%${result.probability}`;
-        if (result.probability >= 75) {
+        inspectProbBadge.innerText = `%${resultChi.probability}`;
+        if (resultChi.probability >= 75) {
             inspectProbBadge.style.color = 'var(--md-error)';
             inspectProbBadge.style.backgroundColor = 'var(--md-error-container)';
-        } else if (result.probability >= 40) {
+        } else if (resultChi.probability >= 40) {
             inspectProbBadge.style.color = '#ffd180';
             inspectProbBadge.style.backgroundColor = '#4e342e';
         } else {
@@ -898,9 +958,38 @@ async function processInspectFile(file) {
             inspectProbBadge.style.backgroundColor = 'var(--md-primary-container)';
         }
 
-        inspectVerdict.innerText = result.verdict;
-        inspectDetails.innerText = result.details;
-        inspectStats.innerText = `χ²: ${result.chiSquare} | Serbestlik Derecesi: ${result.dof}`;
+        inspectVerdict.innerText = resultChi.verdict;
+        inspectDetails.innerText = resultChi.details;
+        inspectStats.innerText = `χ²: ${resultChi.chiSquare} | Serbestlik Derecesi: ${resultChi.dof}`;
+
+        // 3. Fridrich RS Steganaliz testi
+        const resultRS = await StegoWorkerClient.analyzeRS({
+            pixelBuffer: currentInspectImageData.data.buffer,
+            width: currentInspectImageData.width,
+            height: currentInspectImageData.height,
+            channel: 'all',
+            onProgress: (percent, msg) => showStatus(msg)
+        });
+
+        if (inspectRsBadge) {
+            inspectRsBadge.innerText = `%${resultRS.estimatedPayloadPercent.toFixed(1)}`;
+            if (resultRS.estimatedPayloadPercent >= 30) {
+                inspectRsBadge.style.color = 'var(--md-error)';
+                inspectRsBadge.style.backgroundColor = 'var(--md-error-container)';
+            } else if (resultRS.estimatedPayloadPercent >= 10) {
+                inspectRsBadge.style.color = '#ffd180';
+                inspectRsBadge.style.backgroundColor = '#4e342e';
+            } else {
+                inspectRsBadge.style.color = 'var(--md-on-primary-container)';
+                inspectRsBadge.style.backgroundColor = 'var(--md-primary-container)';
+            }
+        }
+        if (inspectRsVerdict) inspectRsVerdict.innerText = resultRS.verdict;
+        if (inspectRsDetails) inspectRsDetails.innerText = resultRS.details;
+        if (inspectRsStats) {
+            const st = resultRS.stats;
+            inspectRsStats.innerText = `RM: ${(st.RM * 100).toFixed(2)}% | SM: ${(st.SM * 100).toFixed(2)}% | R-M: ${(st.R_M * 100).toFixed(2)}% | S-M: ${(st.S_M * 100).toFixed(2)}% | d0: ${st.d0.toFixed(4)} | d-0: ${st.d_minus0.toFixed(4)}`;
+        }
 
         inspectControls.style.display = 'block';
         hideStatus();
@@ -912,8 +1001,16 @@ async function processInspectFile(file) {
 if (fileInspectInput) fileInspectInput.addEventListener('change', (e) => processInspectFile(e.target.files[0]));
 if (dropzoneInspect) setupDropzone(dropzoneInspect, processInspectFile);
 
+[viewModeBitplaneRadio, viewModeHeatmapRadio].forEach(r => {
+    if (r) r.addEventListener('change', updateInspectView);
+});
+
 [inspectChanAll, inspectChanRed, inspectChanGreen, inspectChanBlue].forEach(r => {
-    if (r) r.addEventListener('change', updateInspectBitPlane);
+    if (r) r.addEventListener('change', () => {
+        if (!viewModeHeatmapRadio || !viewModeHeatmapRadio.checked) {
+            updateInspectBitPlane();
+        }
+    });
 });
 
 // ---------- QR KOD ÜRETİCİ & TARAYICI İŞLEMLERİ ----------

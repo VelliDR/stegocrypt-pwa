@@ -7,7 +7,7 @@
 ### İstemci Taraflı İstatistiksel Dirençli Steganografi, Kriptografi & Adli Bilişim Platformu
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests: Passing](https://img.shields.io/badge/Tests-21%20Unit%20%7C%208%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
+[![Tests: Passing](https://img.shields.io/badge/Tests-37%20Unit%20%7C%2010%20E2E%20Passed-brightgreen.svg)](#-test-ve-do%C4%9Frulama)
 [![PWA Ready](https://img.shields.io/badge/PWA-100%25%20Offline-brightgreen.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Security: AES-256-GCM](https://img.shields.io/badge/Security-AES--256--GCM-success.svg)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
 [![KDF: PBKDF2-SHA256](https://img.shields.io/badge/KDF-PBKDF2--100k%2F600k-orange.svg)](https://en.wikipedia.org/wiki/PBKDF2)
@@ -60,9 +60,10 @@ flowchart LR
 * **Sıfır-Kopyalama (Transferable Objects):** Görsel piksel tamponları (`ArrayBuffer`), bellek kopyalama maliyeti olmaksızın ($O(0)$ transfer) ana iş parçacığı ile Worker arasında aktarılır.
 * **Saf JavaScript PNG Codec (`PngCodec`):** HTML5 `<canvas>` elemanının premultiplied alpha, sRGB renk uzayı yuvarlamaları veya tarayıcı farbling (parmak izi bozma) etkilerini baypas etmek için RFC 1950/1951 saf JavaScript PNG kodlayıcı ve çözücü geliştirilmiştir. Dışa aktarılan stego PNG dosyaları bit-exact kesinliktedir.
 
-### 3. İstatiksel İnceleme Direnci & LSB Dağıtımı
+### 3. İstatiksel İnceleme Direnci, LSB Matching ($\pm 1$) & Dağıtım
+* **LSB Matching ($\pm 1$ Embedding):** Klasik LSB yerine koyma (replacement) yönteminde pikseller asimetrik değişerek Değer Çiftleri (PoVs) dengesini bozar ve $\chi^2$ / RS analizine yakalanır. StegoCrypt v3'te pikselin en alt biti hedef bite eşit değilse değer simetrik olarak rastgele $\pm 1$ kaydırılır (0 ve 255 sınır korumalı). Böylece PoVs asimetrisi ve $R_M < R_{-M}$ kayması tamamen nötralize edilir.
 * **PRNG Afin Saçılım:** Veri piksellerin başından itibaren sıralı gömülmez; HKDF tohumundan türetilen aralarında asal adımlarla ($O(1)$ bellek tüketimi) görselin tüm RGB kanallarına homojen dağıtılır.
-* **1-LSB & 2-LSB Seçimi:** Yüksek istatistiksel direnç için 1-LSB; yüksek taşıma kapasitesi için 2-LSB modu.
+* **1-LSB & 2-LSB Seçimi:** Yüksek istatistiksel direnç için 1-LSB; yüksek taşıma kapasitesi için 2-LSB modu (en yakın komşuluk $\pm 2$ eşlemesi ile).
 * **Canvas Farbling Öz-Testi:** Açılışta test deseni çizilerek Brave Shields, Firefox RFP veya gizlilik eklentilerinin canvas verilerine gürültü ekleyip eklemediği denetlenir.
 
 ### 4. Deneysel / Yüksek Riskli İnkâr Modu (Plausible Deniability)
@@ -92,9 +93,11 @@ flowchart LR
 
 ## 🔬 Adli Bilişim & Steganaliz Röntgeni
 
-Uygulamanın **🔬 Steganaliz** sekmesi iki temel adli bilişim aracı sunar:
+Uygulamanın **🔬 Steganaliz** sekmesi gelişmiş adli bilişim araçları sunar:
 1. **LSB Bit Düzlemi Röntgeni:** Bit 0 ve Bit 1 düzlemlerini RGB veya tekil renk kanalları (Kırmızı, Yeşil, Mavi) bazında ayrıştırıp görselleştirir.
 2. **Westfeld Pairs of Values $\chi^2$ Testi:** Değer çiftlerinin ($2k, 2k+1$) frekans dağılımını ölçerek Wilson-Hilferty normalleştirilmiş dönüşümüyle LSB manipülasyon olasılığını ve $p$-değerini raporlar.
+3. **Fridrich RS (Regular/Singular) Steganaliz:** $2 \times 2$ piksel blokları ve ters çevirme maskeleri ($M, -M$) kullanarak LSB yerine koyma asimetrisini hesaplar; gizli veri yük oranını ($\hat{p}$) matematiksel olarak tahmin eder.
+4. **χ² Bölgesel Isı Haritası (Heatmap):** $32 \times 32$ blok kayan pencerelerle yerel steganografik anomali yoğunluğunu renkli yarı saydam katman olarak haritalandırır.
 
 ---
 
@@ -106,7 +109,7 @@ Proje, hem Node.js yerel test ortamında birim testleriyle hem de Playwright ile
 # Bağımlılıkları yükleyin
 npm install
 
-# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient)
+# 1. Birim Testleri (Crypto, Compression, Scatter, Stego, Steganalysis, ZeroWidth, Format v3, PngCodec, WorkerClient, Matching & RS)
 npm run test:unit
 
 # 2. Tarayıcı Uçtan Uca (E2E) Testleri (Playwright + Chromium)
@@ -114,13 +117,14 @@ npm run test:e2e
 ```
 
 **Mevcut Test Durumu:**
-- **32 / 32** Birim Testi Başarılı (`node:test`, 670 ms)
-- **9 / 9** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline ve PngCodec Bit-Exact testi)
+- **37 / 37** Birim Testi Başarılı (`node:test`, 680 ms)
+- **10 / 10** E2E Tarayıcı Testi Başarılı (Strict CSP, Şeffaf PNG, Dosya Gömme, İnkâr Modu, HEIC/HEIF, Web Worker Pipeline, PngCodec Bit-Exact ve LSB Matching & RS analizi)
 
 ---
 
 ## 📁 Teknik Dokümantasyon
 
+- [BENCHMARK.md](docs/BENCHMARK.md) — LSB Replacement vs LSB Matching karşılaştırmalı $\chi^2$ ve Fridrich RS tespit oranları ve ampirik test bulguları.
 - [THREAT_MODEL.md](docs/THREAT_MODEL.md) — Kerckhoffs ilkesi, saldırgan sınıfları, koruma sınırları ve kanal rehberi.
 - [FORMAT.md](docs/FORMAT.md) — Format v1 (sıralı), Format v2 (sıfır imza dağınık) ve Format v3 spesifikasyonu ve test vektörleri.
 - [SECURITY.md](SECURITY.md) — Güvenlik politikası ve sorumlu açık bildirimi (responsible disclosure).

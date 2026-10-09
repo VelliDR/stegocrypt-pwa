@@ -394,6 +394,24 @@
             </div>
         </div>
 
+        <!-- Bit Değiştirme Yöntemi (LSB Matching vs LSB Replacement) -->
+        <div class="m3-field" id="container-method-input">
+            <label>Bit Değiştirme Yöntemi</label>
+            <div class="radio-group" style="flex-direction: row; gap: 16px;">
+                <label class="radio-option">
+                    <input type="radio" name="embed-method" value="matching" checked id="method-matching">
+                    🛡️ LSB Matching (±1) [Önerilen / χ² & RS Dirençli]
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="embed-method" value="replacement" id="method-replacement">
+                    📏 LSB Replacement (Klasik / Eğitim Amaçlı)
+                </label>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: -4px; line-height: 1.4;">
+                <b>LSB Matching:</b> Eşleşmeyen bitlerde pikselleri simetrik ±1 kaydırarak Değer Çiftleri (PoVs) asimetrisini engeller; χ² ve RS steganalizini nötralize eder.
+            </p>
+        </div>
+
         <!-- İnkâr Edilebilir Şifreleme (Tuzak Katman Seçeneği) -->
         <div class="m3-field" id="container-deniable-toggle">
             <label class="radio-option" style="cursor: pointer; user-select: none;">
@@ -538,7 +556,7 @@
     <section id="tab-inspect" class="tab-content">
         <div class="m3-banner">
             <span style="font-size: 1.2rem;">🔬</span>
-            <span>Görselin en önemsiz bitlerini (LSB) röntgen haritası olarak inceleyin ve <b>χ² (Chi-Square)</b> istatistiksel testiyle steganografi varlığını tespit edin.</span>
+            <span>Görselin en alt bitlerini (LSB) röntgen ve <b>χ² (Chi-Square)</b> ısı haritasıyla inceleyin; <b>Fridrich RS</b> steganaliziyle gizli veri yükünü tespit edin.</span>
         </div>
 
         <div class="m3-field">
@@ -551,6 +569,20 @@
 
         <div id="inspect-controls" style="display: none;">
             <div class="m3-field">
+                <label>Görünüm Modu</label>
+                <div class="radio-group" style="flex-direction: row; gap: 16px;">
+                    <label class="radio-option">
+                        <input type="radio" name="inspect-view-mode" value="bitplane" checked id="view-mode-bitplane">
+                        🔍 LSB Bit Düzlemi (Röntgen)
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="inspect-view-mode" value="heatmap" id="view-mode-heatmap">
+                        🌡️ χ² Bölgesel Isı Haritası (32x32)
+                    </label>
+                </div>
+            </div>
+
+            <div class="m3-field" id="container-inspect-channel">
                 <label>Röntgen Filtresi & Kanal</label>
                 <div class="radio-group" style="flex-direction: row; flex-wrap: wrap; gap: 8px;">
                     <label class="radio-option">
@@ -572,18 +604,18 @@
                 </div>
             </div>
 
-            <!-- LSB Röntgen Önizleme Canvas -->
+            <!-- Görsel Önizleme Canvas -->
             <div class="m3-field">
-                <label>LSB Bit Düzlemi Röntgeni (Bit 0)</label>
+                <label id="inspect-canvas-label">LSB Bit Düzlemi Röntgeni (Bit 0)</label>
                 <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
-                    <canvas id="canvas-inspect" role="img" aria-label="LSB Bit Düzlemi Röntgeni" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
+                    <canvas id="canvas-inspect" role="img" aria-label="LSB Bit Düzlemi Röntgeni veya Isı Haritası" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
                 </div>
             </div>
 
-            <!-- Analiz Rapor Kartı -->
+            <!-- 1. Chi-Square Analiz Rapor Kartı -->
             <div id="inspect-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">χ² (Chi-Square) Steganaliz Testi</span>
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">1. χ² (Chi-Square) Steganaliz Testi</span>
                     <span id="inspect-prob-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
                 </div>
                 <h4 id="inspect-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Görsel Analiz Ediliyor...</h4>
@@ -591,6 +623,26 @@
                 <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
                     <span id="inspect-stats">χ²: 0.00 | Serbestlik Derecesi: 0</span>
                 </div>
+            </div>
+
+            <!-- 2. Fridrich RS Steganaliz Rapor Kartı -->
+            <div id="inspect-rs-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">2. Fridrich RS (Regular/Singular) Steganaliz</span>
+                    <span id="inspect-rs-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
+                </div>
+                <h4 id="inspect-rs-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">RS Analizi Yapılıyor...</h4>
+                <p id="inspect-rs-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
+                <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
+                    <span id="inspect-rs-stats">RM: 0.00% | SM: 0.00% | R-M: 0.00% | S-M: 0.00%</span>
+                </div>
+            </div>
+
+            <!-- Steganaliz Karşılaştırma & Bilgi Notu -->
+            <div style="background: var(--md-surface-container-high); border-radius: 16px; padding: 12px 16px; margin-top: 16px; font-size: 0.78rem; color: var(--md-on-surface-variant); line-height: 1.45; border: 1px solid var(--md-outline-variant);">
+                💡 <b>Bulgu & Akademik Karşılaştırma:</b><br>
+                • <b>LSB Replacement:</b> Değer Çiftleri (PoVs) asimetrisi ve $R_M &lt; R_{-M}$ kayması nedeniyle hem χ² hem de RS tarafından yüksek doğrulukla tespit edilir.<br>
+                • <b>LSB Matching (±1):</b> Pikselleri eşit olasılıkla +1/-1 kaydırdığı için $R_M \approx R_{-M}$ ve $S_M \approx S_{-M}$ simetrisi korunur; χ² ve RS tespit oranı <b>≈ %0</b> seviyesinde kalır.
             </div>
         </div>
     </section>

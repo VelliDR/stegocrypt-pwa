@@ -20,8 +20,9 @@ self.onmessage = async (e) => {
 
     try {
         if (action === 'ENCRYPT_V3') {
-            // data: { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy }
+            // data: { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy, method }
             const { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy } = data;
+            const method = data.method || 'matching';
             const imageData = {
                 width,
                 height,
@@ -36,17 +37,17 @@ self.onmessage = async (e) => {
                 const masterDecoy = await CryptoEngine.deriveMasterKeyV3(passDecoy, sharedSalt, 600000);
                 const subkeysDecoy = await CryptoEngine.deriveSubkeysV3(masterDecoy, 'v3/even');
 
-                sendProgress(id, 30, "2/4: Tuzak katman şifreleniyor ve even kanallarına gömülüyor...");
+                sendProgress(id, 30, `2/4: Tuzak katman şifreleniyor (${method} ile even kanallarına)...`);
                 const encDecoy = await CryptoEngine.encryptV3(new Uint8Array(rawDecoy), subkeysDecoy.metaKey, subkeysDecoy.bodyKey, lsbMode);
-                StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even');
+                StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
 
                 sendProgress(id, 50, "3/4: Gerçek katman anahtarı türetiliyor (600.000 KDF)...");
                 const masterReal = await CryptoEngine.deriveMasterKeyV3(pass, sharedSalt, 600000);
                 const subkeysReal = await CryptoEngine.deriveSubkeysV3(masterReal, 'v3/odd');
 
-                sendProgress(id, 75, "4/4: Gerçek katman şifreleniyor ve odd kanallarına gömülüyor...");
+                sendProgress(id, 75, `4/4: Gerçek katman şifreleniyor (${method} ile odd kanallarına)...`);
                 const encReal = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeysReal.metaKey, subkeysReal.bodyKey, lsbMode);
-                StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd');
+                StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
             } else {
                 // Tekil Dağınık Mod (v3/all)
                 sendProgress(id, 20, "1/3: Master anahtar türetiliyor (600.000 PBKDF2)...");
@@ -56,8 +57,8 @@ self.onmessage = async (e) => {
                 sendProgress(id, 50, "2/3: Veri şifreleniyor (AES-256-GCM)...");
                 const enc = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeys.metaKey, subkeys.bodyKey, lsbMode);
 
-                sendProgress(id, 75, "3/3: Piksellere dağıtılıyor (Format v3)...");
-                StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all');
+                sendProgress(id, 75, `3/3: Piksellere dağıtılıyor (Format v3, ${method})...`);
+                StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
             }
 
             sendProgress(id, 90, "PNG kodlanıyor (saf deterministik codec)...");
@@ -149,6 +150,56 @@ self.onmessage = async (e) => {
                     }
                 },
                 [bitPlane.data.buffer, imageData.data.buffer]
+            );
+
+        } else if (action === 'ANALYZE_RS') {
+            // data: { pixelBuffer, width, height, channel }
+            const { pixelBuffer, width, height, channel } = data;
+            const imageData = {
+                width,
+                height,
+                data: new Uint8ClampedArray(pixelBuffer)
+            };
+
+            sendProgress(id, 50, "Piksel grupları ve RS analizi (Fridrich) hesaplanıyor...");
+            const rsResult = SteganalysisEngine.analyzeRS(imageData, channel || 'all');
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        rsResult,
+                        pixelBuffer: imageData.data.buffer
+                    }
+                },
+                [imageData.data.buffer]
+            );
+
+        } else if (action === 'RENDER_HEATMAP') {
+            // data: { pixelBuffer, width, height, blockSize }
+            const { pixelBuffer, width, height, blockSize } = data;
+            const imageData = {
+                width,
+                height,
+                data: new Uint8ClampedArray(pixelBuffer)
+            };
+
+            sendProgress(id, 50, "Bölgesel χ² ısı haritası hesaplanıyor...");
+            const heatmap = SteganalysisEngine.renderHeatmap(imageData, blockSize || 32);
+
+            self.postMessage(
+                {
+                    type: 'SUCCESS',
+                    id,
+                    result: {
+                        heatmapBuffer: heatmap.data.buffer,
+                        pixelBuffer: imageData.data.buffer,
+                        width,
+                        height
+                    }
+                },
+                [heatmap.data.buffer, imageData.data.buffer]
             );
 
         } else if (action === 'PNG_DECODE') {

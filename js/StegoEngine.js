@@ -8,7 +8,52 @@
 import { ScatterEngine } from './ScatterEngine.js';
 import { CryptoEngine } from './CryptoEngine.js';
 
+/**
+ * LSB Matching 1-bit (±1):
+ * Eğer pikselin son biti hedef bite eşitse pikseli korur.
+ * Değilse, rastgele +1 veya -1 ekler. 0 ve 255 sınırlarını taşmaya karşı korur.
+ */
+export function matchLsb1(val, targetBit, randChoice = Math.random() < 0.5) {
+    if ((val & 1) === targetBit) return val;
+    if (val === 0) return 1;
+    if (val === 255) return 254;
+    return randChoice ? val + 1 : val - 1;
+}
+
+/**
+ * LSB Matching 2-bit (|Δ| <= 2):
+ * Hedef 2-bit değerine sahip ve |Δ| en küçük olan değeri seçer.
+ * Eşitlik durumunda (örn. delta = -2 ve +2) rastgele seçim yapar.
+ */
+export function matchLsb2(val, targetBits, randChoice = Math.random() < 0.5) {
+    const curr = val & 3;
+    if (curr === targetBits) return val;
+
+    let bestDiff = 999;
+    let candidates = [];
+    for (const delta of [-2, 2, -1, 1, -3, 3]) {
+        const cand = val + delta;
+        if (cand >= 0 && cand <= 255 && (cand & 3) === targetBits) {
+            const absDiff = Math.abs(delta);
+            if (absDiff < bestDiff) {
+                bestDiff = absDiff;
+                candidates = [cand];
+            } else if (absDiff === bestDiff) {
+                candidates.push(cand);
+            }
+        }
+    }
+    if (candidates.length === 1) return candidates[0];
+    if (candidates.length > 1) {
+        return randChoice ? candidates[0] : candidates[1];
+    }
+    return (val & ~3) | targetBits;
+}
+
 export const StegoEngine = {
+    matchLsb1,
+    matchLsb2,
+
     /**
      * Dağınık Mod (PRNG): Başlığı (1-LSB) ve gövdeyi (1 veya 2-LSB) homojen şekilde saçar.
      * @param {ImageData} imageData
@@ -111,7 +156,7 @@ export const StegoEngine = {
     /**
      * Sıralı Mod (Klasik)
      */
-    embedSequential(imageData, payload, bitsPerChannel = 1) {
+    embedSequential(imageData, payload, bitsPerChannel = 1, method = 'matching') {
         const data = imageData.data;
         const totalUsableChannels = Math.floor((data.length / 4) * 3);
         const headerChannels = 36 * 8;
@@ -135,7 +180,11 @@ export const StegoEngine = {
         for (; i < data.length && byteIdx < 36; i++) {
             if ((i + 1) % 4 === 0) continue;
             const bit = (payload[byteIdx] >> (7 - bitIdx)) & 1;
-            data[i] = (data[i] & 0xFE) | bit;
+            if (method === 'matching') {
+                data[i] = matchLsb1(data[i], bit);
+            } else {
+                data[i] = (data[i] & 0xFE) | bit;
+            }
             bitIdx++;
             if (bitIdx === 8) { bitIdx = 0; byteIdx++; }
         }
@@ -145,7 +194,15 @@ export const StegoEngine = {
             if ((i + 1) % 4 === 0) continue;
             const shift = 8 - bitsPerChannel - bitIdx;
             const bits = (payload[byteIdx] >> shift) & mask;
-            data[i] = (data[i] & ~mask) | bits;
+            if (method === 'matching') {
+                if (bitsPerChannel === 2) {
+                    data[i] = matchLsb2(data[i], bits);
+                } else {
+                    data[i] = matchLsb1(data[i], bits);
+                }
+            } else {
+                data[i] = (data[i] & ~mask) | bits;
+            }
             bitIdx += bitsPerChannel;
             if (bitIdx === 8) { bitIdx = 0; byteIdx++; }
         }
@@ -188,14 +245,18 @@ export const StegoEngine = {
     // FORMAT v3: Public Salt + HKDF Çoklu Katman Motoru (600.000 KDF)
     // =========================================================================
 
-    writeSaltV3(data, salt) {
+    writeSaltV3(data, salt, method = 'matching') {
         for (let b = 0; b < 16; b++) {
             for (let bit = 7; bit >= 0; bit--) {
                 const ch = b * 8 + (7 - bit);
                 const pixelIdx = Math.floor(ch / 3);
                 const rawIdx = pixelIdx * 4 + (ch % 3);
                 const bitVal = (salt[b] >> bit) & 1;
-                data[rawIdx] = (data[rawIdx] & 0xFE) | bitVal;
+                if (method === 'matching') {
+                    data[rawIdx] = matchLsb1(data[rawIdx], bitVal);
+                } else {
+                    data[rawIdx] = (data[rawIdx] & 0xFE) | bitVal;
+                }
             }
         }
     },
@@ -224,9 +285,10 @@ export const StegoEngine = {
      * @param {ArrayBuffer} scatterBits
      * @param {Uint8Array} [salt] - 16 bayt genel tuz
      * @param {'all'|'even'|'odd'} [partition='all']
+     * @param {'matching'|'replacement'} [method='matching'] - LSB Matching (±1) veya LSB Replacement
      * @returns {ImageData}
      */
-    embedV3(imageData, header48, cipherBody, lsbMode, scatterBits, salt, partition = 'all') {
+    embedV3(imageData, header48, cipherBody, lsbMode, scatterBits, salt, partition = 'all', method = 'matching') {
         const data = imageData.data;
         const totalUsableChannels = Math.floor((data.length / 4) * 3);
         const saltChannels = 128; // 16 bayt = 128 kanal
@@ -249,7 +311,7 @@ export const StegoEngine = {
 
         // 1. Genel Salt bloğunu yaz (eğer verilmişse)
         if (salt) {
-            this.writeSaltV3(data, salt);
+            this.writeSaltV3(data, salt, method);
         }
 
         function getRawIndex(stepIdx) {
@@ -273,7 +335,11 @@ export const StegoEngine = {
             for (let bit = 7; bit >= 0; bit--) {
                 const bitVal = (header48[b] >> bit) & 1;
                 const rawIdx = getRawIndex(stepIdx++);
-                data[rawIdx] = (data[rawIdx] & 0xFE) | bitVal;
+                if (method === 'matching') {
+                    data[rawIdx] = matchLsb1(data[rawIdx], bitVal);
+                } else {
+                    data[rawIdx] = (data[rawIdx] & 0xFE) | bitVal;
+                }
             }
         }
 
@@ -283,7 +349,15 @@ export const StegoEngine = {
             for (let bit = 8 - lsbMode; bit >= 0; bit -= lsbMode) {
                 const bitsVal = (cipherBody[b] >> bit) & mask;
                 const rawIdx = getRawIndex(stepIdx++);
-                data[rawIdx] = (data[rawIdx] & ~mask) | bitsVal;
+                if (method === 'matching') {
+                    if (lsbMode === 2) {
+                        data[rawIdx] = matchLsb2(data[rawIdx], bitsVal);
+                    } else {
+                        data[rawIdx] = matchLsb1(data[rawIdx], bitsVal);
+                    }
+                } else {
+                    data[rawIdx] = (data[rawIdx] & ~mask) | bitsVal;
+                }
             }
         }
 
