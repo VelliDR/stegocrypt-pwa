@@ -192,7 +192,24 @@
         <div class="m3-field" id="container-invisible-output" style="display: none; margin-top: 20px;">
             <label>Görünmez Metin Çıktısı</label>
             <textarea id="text-invisible-output" readonly></textarea>
-            <button class="m3-btn m3-btn-tonal" id="btn-copy-invisible" style="margin-top: 10px;">📋 Panoya Kopyala</button>
+            <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                <button class="m3-btn m3-btn-tonal" id="btn-copy-invisible" style="flex: 1;">📋 Panoya Kopyala</button>
+                <button class="m3-btn m3-btn-tonal" id="btn-show-qr" style="flex: 1;">📱 QR Kod Üret & Göster</button>
+            </div>
+
+            <!-- QR Kod Önizleme Alanı -->
+            <div id="container-qr-preview" style="display: none; text-align: center; margin-top: 16px; background: var(--md-surface-dim); padding: 16px; border-radius: 16px; border: 1px solid var(--md-outline);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="font-size: 0.9rem; color: var(--md-primary); margin: 0;">📱 Paylaşılabilir QR Kod</h4>
+                    <button type="button" id="btn-close-qr" style="background: none; border: none; color: var(--md-on-surface-variant); cursor: pointer; font-size: 1.1rem; padding: 4px 8px;" aria-label="QR önizlemeyi kapat">✕</button>
+                </div>
+                <div style="background: white; padding: 12px; display: inline-block; border-radius: 12px; margin-bottom: 12px;">
+                    <canvas id="canvas-qr" role="img" aria-label="Oluşturulan QR Kod" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></canvas>
+                </div>
+                <div>
+                    <button class="m3-btn" id="btn-download-qr" style="padding: 10px 20px; font-size: 0.85rem; width: auto; display: inline-flex;">💾 QR Kodu İndir (PNG)</button>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -231,6 +248,14 @@
         <div class="m3-field" id="container-reveal-text" style="display: none;">
             <label>Görünmez veya Şifreli Metni Yapıştırın</label>
             <textarea id="text-reveal-input" placeholder="WhatsApp veya mesajdan kopyalanan metni buraya yapıştırın..."></textarea>
+
+            <div style="margin-top: 12px; padding: 12px 14px; background: var(--md-surface-dim); border-radius: 12px; border: 1px dashed var(--md-outline);">
+                <span style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--md-primary); margin-bottom: 8px;">📷 VEYA QR KOD GÖRSELİNDEN TARA</span>
+                <div class="m3-dropzone" id="dropzone-qr-scan" style="padding: 12px;">
+                    <p id="label-qr-scan">📷 QR görselini buraya bırakın veya seçin</p>
+                    <input type="file" id="file-qr-scan" accept="image/*" aria-label="QR kod görseli seçin">
+                </div>
+            </div>
         </div>
 
         <div class="m3-field">

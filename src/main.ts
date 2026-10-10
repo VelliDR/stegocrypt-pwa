@@ -10,6 +10,7 @@ import { CompressionEngine } from './codec/CompressionEngine.ts';
 import { ZeroWidthEngine } from './stego/ZeroWidthEngine.ts';
 import { ZeroWidthDetector } from './forensics/ZeroWidthDetector.ts';
 import { CryptoEngine } from './crypto/CryptoEngine.ts';
+import { QREngine } from './codec/QREngine.ts';
 import type { LsbMode, EmbedMethod, DistributionMode, SimpleImageData } from './types/index.ts';
 
 // State Variables
@@ -94,6 +95,11 @@ const btnShare = getEl<HTMLButtonElement>('btn-share');
 const containerInvisibleOutput = getEl<HTMLElement>('container-invisible-output');
 const textInvisibleOutput = getEl<HTMLTextAreaElement>('text-invisible-output');
 const btnCopyInvisible = getEl<HTMLButtonElement>('btn-copy-invisible');
+const btnShowQr = getEl<HTMLButtonElement>('btn-show-qr');
+const containerQrPreview = getEl<HTMLElement>('container-qr-preview');
+const btnCloseQr = getEl<HTMLButtonElement>('btn-close-qr');
+const canvasQr = getEl<HTMLCanvasElement>('canvas-qr');
+const btnDownloadQr = getEl<HTMLButtonElement>('btn-download-qr');
 
 // Reveal Tab Elements
 const revealTypeImageRadio = getEl<HTMLInputElement>('reveal-type-image');
@@ -103,6 +109,8 @@ const containerRevealText = getEl<HTMLElement>('container-reveal-text');
 const fileRevealInput = getEl<HTMLInputElement>('file-reveal');
 const previewReveal = getEl<HTMLImageElement>('preview-reveal');
 const textRevealInput = getEl<HTMLTextAreaElement>('text-reveal-input');
+const fileQrScanInput = getEl<HTMLInputElement>('file-qr-scan');
+const labelQrScan = getEl<HTMLElement>('label-qr-scan');
 const passReveal = getEl<HTMLInputElement>('pass-reveal');
 const btnDecrypt = getEl<HTMLButtonElement>('btn-decrypt');
 const textReveal = getEl<HTMLTextAreaElement>('text-reveal');
@@ -197,6 +205,11 @@ function updateHideModeUI(): void {
     containerCoverInput.style.display = isInv ? 'block' : 'none';
     containerTextInput.style.display = isText ? 'block' : 'none';
     containerFileInput.style.display = isFile ? 'block' : 'none';
+
+    if (!isInv) {
+        containerInvisibleOutput.style.display = 'none';
+        containerQrPreview.style.display = 'none';
+    }
 
     updateRiskAssessment();
 }
@@ -453,6 +466,61 @@ btnCopyInvisible.addEventListener('click', async () => {
     if (!textInvisibleOutput.value) return;
     await navigator.clipboard.writeText(textInvisibleOutput.value);
     showStatus("Görünmez metin panoya kopyalandı!", true);
+});
+
+btnShowQr.addEventListener('click', () => {
+    const text = textInvisibleOutput.value;
+    if (!text) {
+        showStatus("Önce görünmez metin oluşturulmalıdır.", false);
+        return;
+    }
+    try {
+        QREngine.renderToCanvas(canvasQr, text, { level: 'M' });
+        containerQrPreview.style.display = 'block';
+        showStatus("QR kod başarıyla üretildi!", true);
+    } catch (err: any) {
+        showStatus(err?.message || "QR kod üretilemedi.", false);
+    }
+});
+
+btnCloseQr.addEventListener('click', () => {
+    containerQrPreview.style.display = 'none';
+});
+
+btnDownloadQr.addEventListener('click', () => {
+    try {
+        const dataUrl = canvasQr.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `stegocrypt_qr_${Date.now()}.png`;
+        a.click();
+        showStatus("QR kod görseli indirildi.", true);
+    } catch (err: any) {
+        showStatus("QR kod indirilemedi.", false);
+    }
+});
+
+fileQrScanInput.addEventListener('change', async () => {
+    const file = fileQrScanInput.files?.[0];
+    if (!file) return;
+
+    labelQrScan.textContent = `⏳ Taranıyor: ${file.name}...`;
+    try {
+        const decoded = await QREngine.scanFromFile(file);
+        if (decoded) {
+            textRevealInput.value = decoded;
+            labelQrScan.textContent = `✓ Başarıyla okundu: ${file.name}`;
+            showStatus("QR kod içeriği çözme metin alanına aktarıldı!", true);
+        } else {
+            labelQrScan.textContent = `⚠️ QR Kod bulunamadı: ${file.name}`;
+            showStatus("Görsel içinde geçerli bir QR kod tespit edilemedi.", false);
+        }
+    } catch (err: any) {
+        labelQrScan.textContent = `Hata: ${file.name}`;
+        showStatus(err?.message || "QR kod taranamadı.", false);
+    } finally {
+        fileQrScanInput.value = '';
+    }
 });
 
 // -----------------------------------------------------------------------------
