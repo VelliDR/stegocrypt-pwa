@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StegoCrypt - TypeScript v3.1.0 High-Security Steganography</title>
     <meta name="theme-color" content="#131614">
-    <meta name="description" content="İstemci taraflı LSB görsel steganografisi ve adli bilişim analiz aracı">
     <link rel="stylesheet" href="./src/styles/main.css">
+    <script>
+        // Live Server veya statik sunucu koruması:
+        // Eğer Vite dev sunucusu (Vite HMR) yerine Live Server (5500/5501) veya doğrudan dosya üzerinden açıldıysa,
+        // .ts dosyalarının video/mp2t MIME tipiyle reddedilmesini önlemek için derlenmiş dist sürümüne yönlendir.
+        if ((location.port === '5501' || location.port === '5500' || location.protocol === 'file:') && !location.pathname.includes('/dist/')) {
+            location.replace('./dist/index.html' + location.search + location.hash);
+        }
+    </script>
 </head>
 <body>
 
