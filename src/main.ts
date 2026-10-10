@@ -8,6 +8,7 @@ import { StegoWorkerClient } from './workers/StegoWorkerClient.ts';
 import { ImageEngine } from './codec/ImageEngine.ts';
 import { CompressionEngine } from './codec/CompressionEngine.ts';
 import { ZeroWidthEngine } from './stego/ZeroWidthEngine.ts';
+import { VariationSelectorEngine } from './stego/VariationSelectorEngine.ts';
 import { ZeroWidthDetector } from './forensics/ZeroWidthDetector.ts';
 import { CryptoEngine } from './crypto/CryptoEngine.ts';
 import { QREngine } from './codec/QREngine.ts';
@@ -80,6 +81,9 @@ const textDecoy = getEl<HTMLTextAreaElement>('text-decoy');
 const passDecoy = getEl<HTMLInputElement>('pass-decoy');
 
 const containerCoverInput = getEl<HTMLElement>('container-cover-input');
+const invTypeZerowidth = getEl<HTMLInputElement>('inv-type-zerowidth');
+const invTypeVariation = getEl<HTMLInputElement>('inv-type-variation');
+const lblTextCover = getEl<HTMLElement>('lbl-text-cover');
 const textCover = getEl<HTMLInputElement>('text-cover');
 const containerTextInput = getEl<HTMLElement>('container-text-input');
 const textHide = getEl<HTMLTextAreaElement>('text-hide');
@@ -218,6 +222,22 @@ typeTextRadio.addEventListener('change', updateHideModeUI);
 typeFileRadio.addEventListener('change', updateHideModeUI);
 typeInvisibleRadio.addEventListener('change', updateHideModeUI);
 
+invTypeVariation.addEventListener('change', () => {
+    lblTextCover.textContent = "Taşıyıcı Emoji veya Mesaj";
+    textCover.placeholder = "Örn: 🛡️ veya Selamlar 🚀";
+    if (textCover.value === "Selam, toplantı notlarını ekte bulabilirsin.") {
+        textCover.value = "🛡️";
+    }
+});
+
+invTypeZerowidth.addEventListener('change', () => {
+    lblTextCover.textContent = "Kılıf Mesajı (Görünecek Masum Metin)";
+    textCover.placeholder = "Örn: Merhaba, nasılsın?";
+    if (textCover.value === "🛡️") {
+        textCover.value = "Selam, toplantı notlarını ekte bulabilirsin.";
+    }
+});
+
 checkDeniable.addEventListener('change', () => {
     containerDeniableFields.style.display = checkDeniable.checked ? 'block' : 'none';
     updateRiskAssessment();
@@ -342,15 +362,22 @@ btnEncrypt.addEventListener('click', async () => {
             const rawBytes = new TextEncoder().encode(secret);
             const encryptedBytes = await CryptoEngine.encryptBuffer(rawBytes, pass);
 
-            updateProgress(70, "Sıfır genişlikli karakterlere kodlanıyor...");
-            const invisible = ZeroWidthEngine.encode(encryptedBytes);
-            const cover = textCover.value || "Selam, nasılsın?";
-            const finalInvisibleText = `${cover} ${invisible}`;
+            let finalInvisibleText: string;
+            if (invTypeVariation.checked) {
+                updateProgress(70, "Emoji Varyasyon Seçicilerine (VS1-VS16) kodlanıyor...");
+                const carrier = textCover.value || "🛡️";
+                finalInvisibleText = VariationSelectorEngine.encode(encryptedBytes, carrier);
+            } else {
+                updateProgress(70, "Sıfır genişlikli karakterlere kodlanıyor...");
+                const invisible = ZeroWidthEngine.encode(encryptedBytes);
+                const cover = textCover.value || "Selam, nasılsın?";
+                finalInvisibleText = `${cover} ${invisible}`;
+            }
 
             textInvisibleOutput.value = finalInvisibleText;
             containerInvisibleOutput.style.display = 'block';
-            updateProgress(100, "Görünmez metin başarıyla oluşturuldu!");
-            showStatus("Görünmez metin hazır! WhatsApp veya metin uygulamalarına kopyalayabilirsiniz.", true);
+            updateProgress(100, "Gizli metin başarıyla oluşturuldu!");
+            showStatus("Gizli metin hazır! WhatsApp veya sosyal medyaya kopyalayabilirsiniz.", true);
             return;
         }
 
@@ -569,8 +596,14 @@ btnDecrypt.addEventListener('click', async () => {
                 return;
             }
 
-            updateProgress(30, "Görünmez karakterler ayıklanıyor...");
-            const encryptedBytes = ZeroWidthEngine.extractZeroWidth(rawText);
+            let encryptedBytes: Uint8Array;
+            if (VariationSelectorEngine.hasVariationSelectors(rawText)) {
+                updateProgress(30, "Emoji Varyasyon Seçicileri (VS1-VS16) ayıklanıyor...");
+                encryptedBytes = VariationSelectorEngine.extract(rawText);
+            } else {
+                updateProgress(30, "Görünmez sıfır-genişlikli karakterler ayıklanıyor...");
+                encryptedBytes = ZeroWidthEngine.extractZeroWidth(rawText);
+            }
 
             updateProgress(70, "Şifre çözülüyor (AES-256-GCM)...");
             const plainBytes = await CryptoEngine.decryptBuffer(encryptedBytes, pass);

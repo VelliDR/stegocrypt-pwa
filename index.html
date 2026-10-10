@@ -170,7 +170,18 @@
 
         <!-- Kılıf Metni (Görünmez Metin Modu) -->
         <div class="m3-field" id="container-cover-input" style="display: none;">
-            <label>Kılıf Mesajı (Görünecek Masum Metin)</label>
+            <label>Metin Steganografi Türü</label>
+            <div class="radio-group" style="flex-direction: row; gap: 12px; margin-bottom: 10px;">
+                <label class="radio-option">
+                    <input type="radio" name="invisible-carrier-type" value="zerowidth" checked id="inv-type-zerowidth">
+                    👻 Sıfır Genişlikli (ZWSP/ZWNJ)
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="invisible-carrier-type" value="variation" id="inv-type-variation">
+                    🛡️ Emoji Varyasyon Seçici (VS1–VS16)
+                </label>
+            </div>
+            <label id="lbl-text-cover">Kılıf Mesajı (Görünecek Masum Metin)</label>
             <input type="text" id="text-cover" placeholder="Örn: Merhaba, nasılsın?" value="Selam, toplantı notlarını ekte bulabilirsin.">
         </div>
 
