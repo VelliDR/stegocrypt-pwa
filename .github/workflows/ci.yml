@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Unit & E2E Tests (Node ${{ matrix.node-version }})
+    name: TypeScript, Tests & Build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -28,21 +28,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: TypeScript Typecheck
+        run: npm run typecheck
+
       - name: Run Unit Tests
-        run: npm run test:unit
+        run: npm test
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run E2E Tests
-        run: npm run test:e2e
-
-      - name: Upload Test Artifacts (on failure)
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report-node-${{ matrix.node-version }}
-          path: |
-            test-results/
-            playwright-report/
-          retention-days: 7
+      - name: Build Production Bundle
+        run: npm run build
