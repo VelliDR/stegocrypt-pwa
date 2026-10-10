@@ -89,4 +89,16 @@ export interface ZeroWidthReport {
     cleanedText: string;
     smuggledText?: string | undefined;
     hasBidiTrojan: boolean;
+    hasVariationSelectors?: boolean;
+    hasWhitespaceStego?: boolean;
+    categories?: {
+        zeroWidth: number;
+        variationSelectors: number;
+        invisibleFillers: number;
+        invisibleMathOrFormat: number;
+        bidiControls: number;
+        tagPlane14: number;
+        trailingWhitespace: number;
+    };
 }
+

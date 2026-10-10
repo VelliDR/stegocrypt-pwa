@@ -837,6 +837,9 @@ const zwVerdict = getEl<HTMLElement>('zw-verdict');
 const zwDetails = getEl<HTMLElement>('zw-details');
 const zwSmuggledBox = getEl<HTMLElement>('zw-smuggled-box');
 const zwSmuggledText = getEl<HTMLElement>('zw-smuggled-text');
+const zwCleanedBox = getEl<HTMLElement>('zw-cleaned-box');
+const zwCleanedText = getEl<HTMLTextAreaElement>('zw-cleaned-text');
+const btnCopyCleanedZw = getEl<HTMLButtonElement>('btn-copy-cleaned-zw');
 
 btnDetectZerowidth.addEventListener('click', () => {
     const text = textDetectInput.value;
@@ -849,9 +852,16 @@ btnDetectZerowidth.addEventListener('click', () => {
     zerowidthReportBox.style.display = 'block';
 
     if (report.hasZeroWidth) {
-        zwVerdict.textContent = "⚠️ Görünmez Karakterler Tespit Edildi!";
-        zwVerdict.style.color = 'var(--md-error)';
-        zwDetails.textContent = `Toplam ${report.count} adet sıfır-genişlikli karakter bulundu. Türler: ${report.types.join(', ')}.`;
+        if (report.hasBidiTrojan) {
+            zwVerdict.textContent = "🚨 Kritik Uyarı: BiDi Truva Atı ve Gizli Karakterler Tespit Edildi!";
+            zwVerdict.style.color = 'var(--md-error)';
+        } else {
+            zwVerdict.textContent = "⚠️ Şüpheli / Görünmez Karakterler Tespit Edildi!";
+            zwVerdict.style.color = 'var(--md-error)';
+        }
+
+        let detailText = `Toplam ${report.count} adet şüpheli / gizli karakter tespit edildi.\nTespit Edilen Türler: ${report.types.join(', ')}`;
+        zwDetails.textContent = detailText;
 
         if (report.smuggledText) {
             zwSmuggledBox.style.display = 'block';
@@ -859,11 +869,25 @@ btnDetectZerowidth.addEventListener('click', () => {
         } else {
             zwSmuggledBox.style.display = 'none';
         }
+
+        zwCleanedBox.style.display = 'block';
+        zwCleanedText.value = report.cleanedText;
     } else {
-        zwVerdict.textContent = "✓ Temiz Metin (Görünmez Karakter Yok)";
+        zwVerdict.textContent = "✓ Temiz Metin (Görünmez veya Aldatıcı Karakter Yok)";
         zwVerdict.style.color = 'var(--md-primary)';
-        zwDetails.textContent = "Metinde gizlenmiş sıfır-genişlikli veya Unicode Düzlem 14 etiketi bulunamadı.";
+        zwDetails.textContent = "Metinde herhangi bir sıfır-genişlikli, variation selector, BiDi yönlendirici, dolgu veya tag karakteri bulunamadı.";
         zwSmuggledBox.style.display = 'none';
+        zwCleanedBox.style.display = 'none';
+    }
+});
+
+btnCopyCleanedZw.addEventListener('click', async () => {
+    if (!zwCleanedText.value) return;
+    try {
+        await navigator.clipboard.writeText(zwCleanedText.value);
+        showStatus("Arındırılmış temiz metin panoya kopyalandı!", true);
+    } catch {
+        showStatus("Panoya kopyalanamadı.", false);
     }
 });
 

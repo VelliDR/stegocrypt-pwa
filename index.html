@@ -378,10 +378,15 @@
 
             <div id="zerowidth-report" style="display: none; background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
                 <h4 id="zw-verdict" style="font-size: 0.95rem; margin-bottom: 6px;">Sonuç</h4>
-                <p id="zw-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant);"></p>
+                <p id="zw-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); white-space: pre-line;"></p>
                 <div id="zw-smuggled-box" style="display: none; margin-top: 10px; background: var(--md-surface-container-high); padding: 10px; border-radius: 8px;">
-                    <label style="font-size: 0.75rem; color: var(--md-primary); font-weight: 700;">Açığa Çıkarılan Gizli Metin:</label>
+                    <label style="font-size: 0.75rem; color: var(--md-primary); font-weight: 700;">Açığa Çıkarılan Düzlem 14 ASCII Metni:</label>
                     <p id="zw-smuggled-text" style="font-family: monospace; color: #fff; font-size: 0.9rem; margin-top: 4px; word-break: break-all;"></p>
+                </div>
+                <div id="zw-cleaned-box" style="display: none; margin-top: 10px; background: var(--md-surface-container-high); padding: 10px; border-radius: 8px;">
+                    <label style="font-size: 0.75rem; color: var(--md-primary); font-weight: 700;">Temizlenmiş Metin (Tüm Gizli/BiDi Karakterler Arındırıldı):</label>
+                    <textarea id="zw-cleaned-text" readonly style="min-height: 70px; margin-top: 4px; font-size: 0.85rem;"></textarea>
+                    <button class="m3-btn m3-btn-tonal" id="btn-copy-cleaned-zw" style="margin-top: 8px; font-size: 0.8rem; padding: 6px 12px;">📋 Temiz Metni Kopyala</button>
                 </div>
             </div>
         </div>
