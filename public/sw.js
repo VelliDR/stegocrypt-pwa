@@ -1,35 +1,15 @@
-const CACHE_NAME = 'stegocrypt-v8';
-const ASSETS = [
+const CACHE_NAME = 'stegocrypt-v3.1';
+const PRECACHE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon-512.png',
-  './icon-192.png',
-  './js/app.js',
-  './js/CryptoEngine.js',
-  './js/CompressionEngine.js',
-  './js/ScatterEngine.js',
-  './js/SteganalysisEngine.js',
-  './js/StegoEngine.js',
-  './js/ImageEngine.js',
-  './js/AdaptiveEngine.js',
-  './js/BinaryInspector.js',
-  './js/DiffEngine.js',
-  './js/ZeroWidthDetector.js',
-  './js/ZstegScanner.js',
-  './js/ZeroWidthEngine.js',
-  './js/QREngine.js',
-  './js/StegoWorkerClient.js',
-  './js/png/PngCodec.js',
-  './workers/stego.worker.js',
-  './js/vendor/qrcode.mjs',
-  './js/vendor/jsQR.js',
-  './js/vendor/heic2any.min.js'
+  './icon-192.png'
 ];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
   );
 });
 
@@ -50,7 +30,22 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((res) => res || fetch(e.request))
+    caches.match(e.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(e.request).then((networkResponse) => {
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(e.request, responseToCache);
+        });
+        return networkResponse;
+      });
+    })
   );
 });

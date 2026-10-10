@@ -207,7 +207,7 @@ function updateHideModeUI(): void {
     getEl('container-deniable-toggle').style.display = isInv ? 'none' : 'block';
 
     containerCoverInput.style.display = isInv ? 'block' : 'none';
-    containerTextInput.style.display = isText ? 'block' : 'none';
+    containerTextInput.style.display = (isText || isInv) ? 'block' : 'none';
     containerFileInput.style.display = isFile ? 'block' : 'none';
 
     if (!isInv) {
@@ -314,7 +314,7 @@ function updateRiskAssessment(): void {
     }).then((res: any) => {
         const risk = res.risk;
         containerRiskIndicator.style.display = 'block';
-        riskBadge.textContent = risk.label.toUpperCase();
+        riskBadge.textContent = `${risk.label.toUpperCase()} (%${risk.usagePercent.toFixed(1)})`;
         riskBadge.style.backgroundColor = risk.badgeColor;
         riskProgressBar.style.width = `${Math.min(100, risk.usagePercent)}%`;
         riskProgressBar.style.backgroundColor = risk.badgeColor;
@@ -467,7 +467,8 @@ btnEncrypt.addEventListener('click', async () => {
 
             generatedPngBlob = new Blob([workerResult.pngBytes], { type: 'image/png' });
             btnShare.style.display = 'block';
-            showStatus("Şifreleme ve görsel içine gömme başarıyla tamamlandı! İndirebilirsiniz.", true);
+            const modeText = distribution === 'adaptive' ? ' (İçerik Duyarlı Doku Kafesi)' : '';
+            showStatus(`Şifreleme ve görsel içine gömme${modeText} başarıyla tamamlandı! İndirebilirsiniz.`, true);
         } finally {
             // Bellek temizliği (Zeroization)
             if (rawBuffer && rawBuffer.byteLength > 0) new Uint8Array(rawBuffer).fill(0);
@@ -790,6 +791,12 @@ getEl('view-mode-heatmap').addEventListener('change', renderInspectCanvas);
 async function renderInspectCanvas(): Promise<void> {
     if (!currentInspectImageData) return;
     const isBitplane = viewModeBitplane.checked;
+    const label = document.getElementById('inspect-canvas-label');
+    if (label) {
+        label.textContent = isBitplane
+            ? 'Röntgen Filtresi & Görünüm: Bit Düzlemi 0 (LSB)'
+            : 'Röntgen Filtresi & Görünüm: χ² Isı Haritası (32x32)';
+    }
 
     if (isBitplane) {
         const res = await StegoWorkerClient.execute<{ bitPlaneBuffer: ArrayBuffer }>('RENDER_BIT_PLANE', {
@@ -827,12 +834,17 @@ async function renderInspectCanvas(): Promise<void> {
 
 // 3.B Binary Triage
 const fileBinaryInput = getEl<HTMLInputElement>('file-binary');
+const containerBinaryResults = getEl<HTMLElement>('container-binary-results');
 const binaryReportBox = getEl<HTMLElement>('binary-report');
 const binaryFormatBadge = getEl<HTMLElement>('binary-format-badge');
 const binarySizeLbl = getEl<HTMLElement>('binary-size-lbl');
 const binaryVerdict = getEl<HTMLElement>('binary-verdict');
 const binaryDetails = getEl<HTMLElement>('binary-details');
-const binaryChunksTbody = getEl<HTMLTableSectionElement>('binary-chunks-table').querySelector('tbody')!;
+const binaryOverlayCard = getEl<HTMLElement>('binary-overlay-card');
+const binaryOverlayDetails = getEl<HTMLElement>('binary-overlay-details');
+const binaryOverlayHex = getEl<HTMLElement>('binary-overlay-hex');
+const btnDownloadOverlay = getEl<HTMLButtonElement>('btn-download-overlay');
+const binaryChunksTbody = getEl<HTMLTableSectionElement>('tbody-binary-chunks');
 
 fileBinaryInput.addEventListener('change', async () => {
     const file = fileBinaryInput.files?.[0];
@@ -843,11 +855,29 @@ fileBinaryInput.addEventListener('change', async () => {
         const res = await StegoWorkerClient.execute<{ report: any }>('INSPECT_BINARY', { fileBuffer: buf });
         const r = res.report;
 
+        containerBinaryResults.style.display = 'block';
         binaryReportBox.style.display = 'block';
-        binaryFormatBadge.textContent = `FORMAT: ${r.format.toUpperCase()}`;
+        binaryFormatBadge.textContent = r.format.toUpperCase();
         binarySizeLbl.textContent = `${Math.round(r.fileSize / 1024)} KB`;
         binaryVerdict.textContent = r.verdict;
         binaryDetails.textContent = r.verdictDetails;
+
+        if (r.trailingData) {
+            binaryOverlayCard.style.display = 'block';
+            binaryOverlayDetails.textContent = `PNG sonlandırıcı chunk'ından (IEND) sonra ${r.trailingData.length} bayt ek veri bulundu! İmza: ${r.trailingData.identifiedSignature}.`;
+            binaryOverlayHex.textContent = r.trailingData.hexPreview;
+            btnDownloadOverlay.onclick = () => {
+                const blob = new Blob([r.trailingData.bytes]);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `overlay_extracted.${r.trailingData.possibleExtension || 'bin'}`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+        } else {
+            binaryOverlayCard.style.display = 'none';
+        }
 
         binaryChunksTbody.innerHTML = '';
         if (r.chunks && r.chunks.length > 0) {
@@ -868,20 +898,28 @@ fileBinaryInput.addEventListener('change', async () => {
 });
 
 // 3.C Diff Comparison
-const fileDiffOrig = getEl<HTMLInputElement>('file-diff-orig');
+const fileDiffCover = getEl<HTMLInputElement>('file-diff-cover');
 const fileDiffStego = getEl<HTMLInputElement>('file-diff-stego');
-const btnCompareDiff = getEl<HTMLButtonElement>('btn-compare-diff');
-const diffResultsBox = getEl<HTMLElement>('diff-results');
-const diffValPsnr = getEl<HTMLElement>('diff-val-psnr');
-const diffValSsim = getEl<HTMLElement>('diff-val-ssim');
-const diffValChanged = getEl<HTMLElement>('diff-val-changed');
+const labelDiffCover = getEl<HTMLElement>('label-diff-cover');
+const labelDiffStego = getEl<HTMLElement>('label-diff-stego');
+const btnRunDiff = getEl<HTMLButtonElement>('btn-run-diff');
+const containerDiffResults = getEl<HTMLElement>('container-diff-results');
+const diffPsnrVal = getEl<HTMLElement>('diff-psnr-val');
+const diffSsimVal = getEl<HTMLElement>('diff-ssim-val');
+const diffChangedVal = getEl<HTMLElement>('diff-changed-val');
+const diffModeAmplified = getEl<HTMLInputElement>('diff-mode-amplified');
+const diffModeLsb = getEl<HTMLInputElement>('diff-mode-lsb');
+const containerDiffSlider = getEl<HTMLElement>('container-diff-slider');
+const diffAmpSlider = getEl<HTMLInputElement>('diff-amp-slider');
+const diffAmpLabel = getEl<HTMLElement>('diff-amp-label');
 const canvasDiff = getEl<HTMLCanvasElement>('canvas-diff');
+let cachedDiffResult: any = null;
 
-fileDiffOrig.addEventListener('change', async () => {
-    const f = fileDiffOrig.files?.[0];
+fileDiffCover.addEventListener('change', async () => {
+    const f = fileDiffCover.files?.[0];
     if (f) {
         diffOrigImageData = await ImageEngine.loadImageData(f);
-        getEl('lbl-diff-orig').textContent = `✓ ${f.name}`;
+        labelDiffCover.textContent = `Cover (${diffOrigImageData.width}x${diffOrigImageData.height})`;
     }
 });
 
@@ -889,20 +927,43 @@ fileDiffStego.addEventListener('change', async () => {
     const f = fileDiffStego.files?.[0];
     if (f) {
         diffStegoImageData = await ImageEngine.loadImageData(f);
-        getEl('lbl-diff-stego').textContent = `✓ ${f.name}`;
+        labelDiffStego.textContent = `Stego (${diffStegoImageData.width}x${diffStegoImageData.height})`;
     }
 });
 
-btnCompareDiff.addEventListener('click', async () => {
+function renderDiffCanvas(): void {
+    if (!cachedDiffResult) return;
+    const isLsb = diffModeLsb.checked;
+    containerDiffSlider.style.display = isLsb ? 'none' : 'block';
+
+    canvasDiff.width = cachedDiffResult.width;
+    canvasDiff.height = cachedDiffResult.height;
+    const ctx = canvasDiff.getContext('2d');
+    if (ctx) {
+        const buffer = isLsb ? cachedDiffResult.lsbDiffBuffer : cachedDiffResult.ampDiffBuffer;
+        const imgData = new ImageData(new Uint8ClampedArray(buffer), cachedDiffResult.width, cachedDiffResult.height);
+        ctx.putImageData(imgData, 0, 0);
+    }
+}
+
+diffModeAmplified.addEventListener('change', renderDiffCanvas);
+diffModeLsb.addEventListener('change', renderDiffCanvas);
+diffAmpSlider.addEventListener('input', () => {
+    diffAmpLabel.textContent = `${diffAmpSlider.value}x`;
+});
+
+btnRunDiff.addEventListener('click', async () => {
     if (!diffOrigImageData || !diffStegoImageData) {
         showStatus("Lütfen hem orijinal hem de stego görseli seçin.", false);
         return;
     }
 
     try {
+        const amp = parseInt(diffAmpSlider.value || '30', 10);
         const res = await StegoWorkerClient.execute<{
             comparison: any;
             ampDiffBuffer: ArrayBuffer;
+            lsbDiffBuffer: ArrayBuffer;
             width: number;
             height: number;
         }>('COMPARE_IMAGES', {
@@ -910,82 +971,83 @@ btnCompareDiff.addEventListener('click', async () => {
             pixelBuffer2: diffStegoImageData.data.buffer.slice(0),
             width: diffOrigImageData.width,
             height: diffOrigImageData.height,
-            amplifier: 20
+            amplifier: amp
         });
 
-        diffResultsBox.style.display = 'block';
-        diffValPsnr.textContent = res.comparison.psnr === Infinity ? '∞' : `${res.comparison.psnr.toFixed(2)}`;
-        diffValSsim.textContent = res.comparison.ssim.toFixed(4);
-        diffValChanged.textContent = `${res.comparison.changedPixels} (%${res.comparison.changedPercent.toFixed(2)})`;
+        cachedDiffResult = res;
+        containerDiffResults.style.display = 'block';
+        diffPsnrVal.textContent = res.comparison.psnr === Infinity ? '∞ dB' : `${res.comparison.psnr.toFixed(2)} dB`;
+        diffSsimVal.textContent = res.comparison.ssim.toFixed(4);
+        diffChangedVal.textContent = `${res.comparison.changedPixels} (%${res.comparison.changedPercent.toFixed(2)})`;
 
-        canvasDiff.width = res.width;
-        canvasDiff.height = res.height;
-        const ctx = canvasDiff.getContext('2d');
-        if (ctx) {
-            const imgData = new ImageData(new Uint8ClampedArray(res.ampDiffBuffer), res.width, res.height);
-            ctx.putImageData(imgData, 0, 0);
-        }
+        renderDiffCanvas();
     } catch (err: any) {
         showStatus(`Diff hatası: ${err.message}`, false);
     }
 });
 
 // 3.D Invisible Text Detector
-const textDetectInput = getEl<HTMLTextAreaElement>('text-detect-input');
-const btnDetectZerowidth = getEl<HTMLButtonElement>('btn-detect-zerowidth');
-const zerowidthReportBox = getEl<HTMLElement>('zerowidth-report');
+const textZerowidthInput = getEl<HTMLTextAreaElement>('text-zerowidth-input');
+const btnAnalyzeZerowidth = getEl<HTMLButtonElement>('btn-analyze-zerowidth');
+const containerZerowidthResults = getEl<HTMLElement>('container-zerowidth-results');
+const zerowidthVerdictBanner = getEl<HTMLElement>('zerowidth-verdict-banner');
 const zwVerdict = getEl<HTMLElement>('zw-verdict');
 const zwDetails = getEl<HTMLElement>('zw-details');
-const zwSmuggledBox = getEl<HTMLElement>('zw-smuggled-box');
-const zwSmuggledText = getEl<HTMLElement>('zw-smuggled-text');
-const zwCleanedBox = getEl<HTMLElement>('zw-cleaned-box');
-const zwCleanedText = getEl<HTMLTextAreaElement>('zw-cleaned-text');
-const btnCopyCleanedZw = getEl<HTMLButtonElement>('btn-copy-cleaned-zw');
+const containerSmuggledAscii = getEl<HTMLElement>('container-smuggled-ascii');
+const textSmuggledPayload = getEl<HTMLTextAreaElement>('text-smuggled-payload');
+const containerBidiWarning = getEl<HTMLElement>('container-bidi-warning');
+const textZerowidthClean = getEl<HTMLTextAreaElement>('text-zerowidth-clean');
+const btnCopyCleanText = getEl<HTMLButtonElement>('btn-copy-clean-text');
 
-btnDetectZerowidth.addEventListener('click', () => {
-    const text = textDetectInput.value;
+btnAnalyzeZerowidth.addEventListener('click', () => {
+    const text = textZerowidthInput.value;
     if (!text) {
         showStatus("Lütfen taranacak metni girin.", false);
         return;
     }
 
     const report = ZeroWidthDetector.analyze(text);
-    zerowidthReportBox.style.display = 'block';
+    containerZerowidthResults.style.display = 'block';
 
     if (report.hasZeroWidth) {
+        zerowidthVerdictBanner.textContent = "🚨 Gizli Karakter Tespit Edildi! (Sıfır Genişlik / Smuggling / BiDi)";
         if (report.hasBidiTrojan) {
             zwVerdict.textContent = "🚨 Kritik Uyarı: BiDi Truva Atı ve Gizli Karakterler Tespit Edildi!";
             zwVerdict.style.color = 'var(--md-error)';
+            containerBidiWarning.style.display = 'block';
         } else {
             zwVerdict.textContent = "⚠️ Şüpheli / Görünmez Karakterler Tespit Edildi!";
             zwVerdict.style.color = 'var(--md-error)';
+            containerBidiWarning.style.display = 'none';
         }
 
         let detailText = `Toplam ${report.count} adet şüpheli / gizli karakter tespit edildi.\nTespit Edilen Türler: ${report.types.join(', ')}`;
         zwDetails.textContent = detailText;
 
         if (report.smuggledText) {
-            zwSmuggledBox.style.display = 'block';
-            zwSmuggledText.textContent = report.smuggledText;
+            containerSmuggledAscii.style.display = 'block';
+            textSmuggledPayload.value = report.smuggledText;
         } else {
-            zwSmuggledBox.style.display = 'none';
+            containerSmuggledAscii.style.display = 'none';
+            textSmuggledPayload.value = '';
         }
 
-        zwCleanedBox.style.display = 'block';
-        zwCleanedText.value = report.cleanedText;
+        textZerowidthClean.value = report.cleanedText;
     } else {
+        zerowidthVerdictBanner.textContent = "✓ Temiz Metin (Görünmez veya Aldatıcı Karakter Yok)";
         zwVerdict.textContent = "✓ Temiz Metin (Görünmez veya Aldatıcı Karakter Yok)";
         zwVerdict.style.color = 'var(--md-primary)';
         zwDetails.textContent = "Metinde herhangi bir sıfır-genişlikli, variation selector, BiDi yönlendirici, dolgu veya tag karakteri bulunamadı.";
-        zwSmuggledBox.style.display = 'none';
-        zwCleanedBox.style.display = 'none';
+        containerSmuggledAscii.style.display = 'none';
+        containerBidiWarning.style.display = 'none';
+        textZerowidthClean.value = report.cleanedText;
     }
 });
 
-btnCopyCleanedZw.addEventListener('click', async () => {
-    if (!zwCleanedText.value) return;
+btnCopyCleanText.addEventListener('click', async () => {
+    if (!textZerowidthClean.value) return;
     try {
-        await navigator.clipboard.writeText(zwCleanedText.value);
+        await navigator.clipboard.writeText(textZerowidthClean.value);
         showStatus("Arındırılmış temiz metin panoya kopyalandı!", true);
     } catch {
         showStatus("Panoya kopyalanamadı.", false);
@@ -994,25 +1056,30 @@ btnCopyCleanedZw.addEventListener('click', async () => {
 
 // 3.E zsteg Deep Scanner
 const fileZstegInput = getEl<HTMLInputElement>('file-zsteg');
-const btnScanZsteg = getEl<HTMLButtonElement>('btn-scan-zsteg');
-const zstegResultsBox = getEl<HTMLElement>('zsteg-results');
-const zstegTableTbody = getEl<HTMLTableSectionElement>('zsteg-table').querySelector('tbody')!;
+const labelZstegFile = getEl<HTMLElement>('label-zsteg-file');
+const btnStartZsteg = getEl<HTMLButtonElement>('btn-start-zsteg');
+const containerZstegResults = getEl<HTMLElement>('container-zsteg-results');
+const zstegFindingsCount = getEl<HTMLElement>('zsteg-findings-count');
+const tbodyZstegResults = getEl<HTMLTableSectionElement>('tbody-zsteg-results');
 let zstegImageData: SimpleImageData | null = null;
 
 fileZstegInput.addEventListener('change', async () => {
     const f = fileZstegInput.files?.[0];
-    if (f) zstegImageData = await ImageEngine.loadImageData(f);
+    if (f) {
+        zstegImageData = await ImageEngine.loadImageData(f);
+        labelZstegFile.textContent = f.name;
+    }
 });
 
-btnScanZsteg.addEventListener('click', async () => {
+btnStartZsteg.addEventListener('click', async () => {
     if (!zstegImageData) {
         showStatus("Lütfen taranacak PNG görselini seçin.", false);
         return;
     }
 
     try {
-        zstegTableTbody.innerHTML = '';
-        zstegResultsBox.style.display = 'block';
+        tbodyZstegResults.innerHTML = '';
+        containerZstegResults.style.display = 'block';
 
         const res = await StegoWorkerClient.execute<{ findings: any[] }>(
             'SCAN_ZSTEG',
@@ -1026,8 +1093,10 @@ btnScanZsteg.addEventListener('click', async () => {
             (pct, txt) => updateProgress(pct, txt)
         );
 
+        zstegFindingsCount.textContent = `${res.findings.length} Bulgu`;
+
         if (res.findings.length === 0) {
-            zstegTableTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--md-on-surface-variant);">56 kombinasyonda belirgin dosya imzası veya metin bulunamadı.</td></tr>';
+            tbodyZstegResults.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--md-on-surface-variant);">56 kombinasyonda belirgin dosya imzası veya metin bulunamadı.</td></tr>';
             return;
         }
 
@@ -1037,10 +1106,10 @@ btnScanZsteg.addEventListener('click', async () => {
                 <td style="font-family: monospace; font-weight: 700; color: var(--md-primary);">${finding.comboId}</td>
                 <td style="font-weight: 600;">${finding.signatureName}</td>
                 <td style="font-family: monospace; font-size: 0.75rem; color: #fff;">${finding.textSample}</td>
-                <td><button type="button" class="m3-btn m3-btn-tonal" style="padding: 4px 8px; font-size: 0.7rem; width: auto;" data-combo="${finding.comboId}">Çıkart</button></td>
+                <td><button type="button" class="m3-btn m3-btn-tonal btn-zsteg-export" style="padding: 4px 8px; font-size: 0.7rem; width: auto;" data-combo="${finding.comboId}">Çıkart</button></td>
             `;
 
-            const btnExtract = tr.querySelector('button')!;
+            const btnExtract = tr.querySelector('.btn-zsteg-export') as HTMLButtonElement;
             btnExtract.addEventListener('click', async () => {
                 const payloadRes = await StegoWorkerClient.execute<{ payloadBuffer: ArrayBuffer }>(
                     'EXTRACT_ZSTEG_PAYLOAD',
@@ -1061,7 +1130,7 @@ btnScanZsteg.addEventListener('click', async () => {
                 URL.revokeObjectURL(url);
             });
 
-            zstegTableTbody.appendChild(tr);
+            tbodyZstegResults.appendChild(tr);
         }
     } catch (err: any) {
         showStatus(`zsteg tarama hatası: ${err.message}`, false);
@@ -1093,4 +1162,54 @@ btnScanZsteg.addEventListener('click', async () => {
     }
 })();
 
+// ---------- Service Worker Kaydı & Kullanıcı Onaylı Güncelleme ----------
+function setupServiceWorker(): void {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    window.addEventListener('load', () => {
+        let refreshing = false;
+        const initialController = navigator.serviceWorker.controller;
+        const bannerPwaUpdate = document.getElementById('banner-pwa-update');
+        const btnPwaReload = document.getElementById('btn-pwa-reload');
+
+        function showPwaUpdatePrompt(waitingWorker: ServiceWorker): void {
+            if (!bannerPwaUpdate) return;
+            bannerPwaUpdate.style.display = 'flex';
+            if (btnPwaReload) {
+                btnPwaReload.onclick = () => {
+                    waitingWorker.postMessage({ action: 'SKIP_WAITING' });
+                };
+            }
+        }
+
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+            if (reg.waiting) {
+                showPwaUpdatePrompt(reg.waiting);
+            }
+
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                if (!newWorker) return;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showPwaUpdatePrompt(newWorker);
+                    }
+                });
+            });
+        }).catch((err) => {
+            console.error('ServiceWorker kayıt hatası: ', err);
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing && initialController) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
+    });
+}
+
+setupServiceWorker();
+
 console.log("🌿 StegoCrypt TypeScript v3.1.0 initialized successfully.");
+

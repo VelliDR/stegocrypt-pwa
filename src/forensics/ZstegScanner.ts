@@ -70,51 +70,64 @@ export const ZstegScanner = {
         const isYx = combo.dir === 'yx';
 
         const out = new Uint8Array(maxBytes);
-        let byteIdx = 0;
+        let outIdx = 0;
         let curByte = 0;
-        let bitCount = 0;
+        let bitPos = 0;
 
-        const outerLimit = isYx ? width : height;
-        const innerLimit = isYx ? height : width;
+        if (!isYx) {
+            // 'xy' satır öncelikli
+            for (let y = 0; y < height; y++) {
+                const rowOffset = y * width * 4;
+                for (let x = 0; x < width; x++) {
+                    const pxOffset = rowOffset + (x * 4);
+                    for (let c = 0; c < offsets.length; c++) {
+                        const rawVal = data[pxOffset + offsets[c]!]!;
+                        const bits = rawVal & mask;
 
-        for (let o = 0; o < outerLimit; o++) {
-            for (let i = 0; i < innerLimit; i++) {
-                const x = isYx ? o : i;
-                const y = isYx ? i : o;
-                const pIdx = (y * width + x) * 4;
-
-                for (let c = 0; c < offsets.length; c++) {
-                    const rawVal = data[pIdx + offsets[c]!]!;
-                    let bits = rawVal & mask;
-
-                    if (isMsb && depth === 2) {
-                        bits = ((bits & 1) << 1) | ((bits >> 1) & 1);
-                    }
-
-                    if (depth === 1) {
-                        curByte = (curByte << 1) | (bits & 1);
-                        bitCount++;
-                        if (bitCount === 8) {
-                            out[byteIdx++] = curByte;
-                            curByte = 0;
-                            bitCount = 0;
-                            if (byteIdx >= maxBytes) return out;
+                        if (isMsb) {
+                            curByte = (curByte << depth) | bits;
+                        } else {
+                            curByte |= (bits << bitPos);
                         }
-                    } else if (depth === 2) {
-                        curByte = (curByte << 2) | (bits & 3);
-                        bitCount += 2;
-                        if (bitCount === 8) {
-                            out[byteIdx++] = curByte;
+                        bitPos += depth;
+
+                        if (bitPos >= 8) {
+                            out[outIdx++] = curByte & 0xFF;
+                            if (outIdx >= maxBytes) return out;
                             curByte = 0;
-                            bitCount = 0;
-                            if (byteIdx >= maxBytes) return out;
+                            bitPos = 0;
+                        }
+                    }
+                }
+            }
+        } else {
+            // 'yx' sütun öncelikli
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+                    const pxOffset = (y * width + x) * 4;
+                    for (let c = 0; c < offsets.length; c++) {
+                        const rawVal = data[pxOffset + offsets[c]!]!;
+                        const bits = rawVal & mask;
+
+                        if (isMsb) {
+                            curByte = (curByte << depth) | bits;
+                        } else {
+                            curByte |= (bits << bitPos);
+                        }
+                        bitPos += depth;
+
+                        if (bitPos >= 8) {
+                            out[outIdx++] = curByte & 0xFF;
+                            if (outIdx >= maxBytes) return out;
+                            curByte = 0;
+                            bitPos = 0;
                         }
                     }
                 }
             }
         }
 
-        return out.subarray(0, byteIdx);
+        return out.subarray(0, outIdx);
     },
 
     inspectSample(sample: Uint8Array): { signatureName: string; textSample: string; confidence: 'high' | 'medium' | 'low' } | null {

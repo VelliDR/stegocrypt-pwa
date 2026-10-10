@@ -20,13 +20,20 @@ export const ImageEngine = {
      * PNG dosyaları için doğrudan deterministik PngCodec çalıştırılarak tarayıcı canvas renk dönüşümü ve parmak izi gürültüsü önlenir.
      */
     async loadImageData(file: File | Blob): Promise<SimpleImageData> {
-        if (file.type === 'image/png' || (file instanceof File && file.name.toLowerCase().endsWith('.png'))) {
-            try {
-                const buf = await file.arrayBuffer();
-                return await PngCodec.decode(buf);
-            } catch {
-                // Fallback to Canvas
+        try {
+            const buf = await file.arrayBuffer();
+            const u8 = new Uint8Array(buf);
+            // PNG Dosya İmzası (Magic: 89 50 4E 47)
+            if (u8.length >= 8 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) {
+                const decoded = await PngCodec.decode(u8);
+                // Alfa düzleştirme: Şeffaf piksellerin alfa kanalını 255'e sabitleyerek bozulmayı önle
+                for (let i = 3; i < decoded.data.length; i += 4) {
+                    decoded.data[i] = 255;
+                }
+                return decoded;
             }
+        } catch {
+            // Fallback to Canvas
         }
 
         return new Promise<SimpleImageData>((resolve, reject) => {

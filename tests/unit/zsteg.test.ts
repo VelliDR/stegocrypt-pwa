@@ -19,7 +19,7 @@ describe('ZstegScanner', () => {
         const targetBytes = [0x46, 0x4C, 0x41, 0x47];
         let p = 0;
         for (const b of targetBytes) {
-            for (let bit = 7; bit >= 0; bit--) {
+            for (let bit = 0; bit < 8; bit++) {
                 const bitVal = (b >> bit) & 1;
                 data[p * 4] = bitVal; // Red channel
                 p++;
@@ -44,7 +44,7 @@ describe('ZstegScanner', () => {
         let p = 0;
         for (let i = 0; i < flagText.length; i++) {
             const code = flagText.charCodeAt(i);
-            for (let bit = 7; bit >= 0; bit--) {
+            for (let bit = 0; bit < 8; bit++) {
                 const bitVal = (code >> bit) & 1;
                 data[p * 4 + 2] = bitVal; // Blue channel
                 p++;

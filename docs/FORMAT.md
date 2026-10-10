@@ -124,9 +124,9 @@ Aşağıdaki test vektörü, bağımsız kütüphanelerin uyumluluğunu test etm
 - **Salt (Hex, 16B):** `000102030405060708090a0b0c0d0e0f`
 - **IV (Hex, 12B):** `a0a1a2a3a4a5a6a7a8a9aaab`
 - **Türetilen Anahtar (PBKDF2-100k, Hex):**
-  `08713063f23a5e840a0c64c767f407768ad33b3846ce24204c3c3942fc17a7a2`
+  `34fb80b71e3476879682a83f1de5a610169b372db8a26059c0001bef38a4c73d`
 - **Ciphertext + Tag (36B Hex):**
-  `1c36001fffc8f09d85489f664a7c06eb6ca9cb0bc7f5979ff20311f99c9c82ee30ad43be`
+  `e76830fe5afce58b07959649d133aaf93a18689948edbfe6f9ba299d5ab1a291f5767ce0`
 - **Tam Paket Başlığı (36B Hex):**
   `5354473100000024000102030405060708090a0b0c0d0e0fa0a1a2a3a4a5a6a7a8a9aaab`
 

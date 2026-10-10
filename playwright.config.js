@@ -9,12 +9,12 @@ export default defineConfig({
   expect: { timeout: 10000 },
   fullyParallel: true,
   webServer: {
-    command: 'node tests/helpers/static-server.js',
-    port: 8080,
+    command: 'npm run preview -- --port 4173 --strictPort',
+    port: 4173,
     reuseExistingServer: !process.env.CI,
   },
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://localhost:4173',
     headless: true,
     launchOptions: {
       ...(localChromium ? { executablePath: localChromium } : {}),
