@@ -1,24 +1,37 @@
 {
   "name": "stegocrypt-pwa",
-  "version": "3.0.0-dev",
-  "description": "Client-side image steganography and forensics web application",
+  "version": "3.1.0",
+  "description": "Client-side image steganography, memory-hard cryptography, and forensics workbench in Vite + TypeScript",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/unit/*.test.js",
-    "test:unit": "node --test tests/unit/*.test.js",
-    "test:e2e": "playwright test"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "steganography",
     "cryptography",
     "pwa",
-    "forensics",
-    "lsb",
-    "aes-256-gcm"
+    "typescript",
+    "vite",
+    "argon2id",
+    "aes-256-gcm",
+    "lsb-matching",
+    "forensics"
   ],
   "author": "VelliDR",
   "license": "MIT",
+  "dependencies": {
+    "@noble/ciphers": "^1.2.1",
+    "@noble/hashes": "^1.7.1",
+    "hash-wasm": "^4.12.0"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.64.0"
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0",
+    "vitest": "^3.0.7"
   }
 }

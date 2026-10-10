@@ -1,1030 +1,439 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self';">
-    <meta name="referrer" content="no-referrer">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StegoCrypt - PWA</title>
+    <title>StegoCrypt - TypeScript v3.1.0 High-Security Steganography</title>
     <meta name="theme-color" content="#131614">
-    <meta name="description" content="İstemci taraflı LSB görsel steganografisi ve görünmez metin şifreleme uygulaması">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <style>
-        :root {
-            --md-primary: #8eba96;
-            --md-on-primary: #122818;
-            --md-primary-container: #233a29;
-            --md-on-primary-container: #c4ebd0;
-            --md-surface: #131614;
-            --md-surface-dim: #0e110f;
-            --md-surface-container: #1b1f1c;
-            --md-surface-container-high: #252a26;
-            --md-surface-container-highest: #303531;
-            --md-on-surface: #e1e3df;
-            --md-on-surface-variant: #bfc8be;
-            --md-outline: #3d453f;
-            --md-outline-variant: #2d332e;
-            --md-error: #ffb4ab;
-            --md-error-container: #93000a;
-            --md-on-error: #690005;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', 'Segoe UI', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body {
-            background-color: var(--md-surface);
-            color: var(--md-on-surface);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-        }
-
-        .m3-card {
-            width: 100%;
-            max-width: 480px;
-            background-color: var(--md-surface-container);
-            border-radius: 28px;
-            padding: 24px;
-            border: 1px solid var(--md-outline-variant);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 24px;
-        }
-
-        header h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--md-primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            letter-spacing: -0.02em;
-        }
-
-        header p {
-            font-size: 0.85rem;
-            color: var(--md-on-surface-variant);
-            margin-top: 6px;
-        }
-
-        .m3-segmented-button {
-            display: flex;
-            background-color: var(--md-surface-container-high);
-            padding: 4px;
-            border-radius: 100px;
-            margin-bottom: 24px;
-            border: 1px solid var(--md-outline-variant);
-        }
-
-        .m3-segment-btn {
-            flex: 1;
-            padding: 10px 16px;
-            border: none;
-            background: transparent;
-            color: var(--md-on-surface-variant);
-            font-size: 0.875rem;
-            font-weight: 600;
-            border-radius: 100px;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
-        }
-
-        .m3-segment-btn.active {
-            background-color: var(--md-primary-container);
-            color: var(--md-on-primary-container);
-        }
-
-        .m3-field {
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .m3-field label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--md-primary);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        input[type="text"],
-        input[type="password"],
-        textarea {
-            width: 100%;
-            background-color: var(--md-surface-dim);
-            border: 1.5px solid var(--md-outline);
-            border-radius: 12px;
-            padding: 14px 16px;
-            color: var(--md-on-surface);
-            font-size: 0.95rem;
-            outline: none;
-            transition: border-color 0.2s, background-color 0.2s;
-        }
-
-        input:focus, textarea:focus {
-            border-color: var(--md-primary);
-            background-color: var(--md-surface-container-high);
-        }
-
-        textarea {
-            resize: vertical;
-            min-height: 90px;
-        }
-
-        .radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 12px;
-            background: var(--md-surface-dim);
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: 1px solid var(--md-outline-variant);
-        }
-
-        .radio-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            color: var(--md-on-surface);
-            font-weight: 500;
-        }
-
-        .radio-option input[type="radio"] {
-            accent-color: var(--md-primary);
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-
-        .m3-dropzone {
-            border: 2px dashed var(--md-outline);
-            border-radius: 20px;
-            padding: 20px 16px;
-            text-align: center;
-            background-color: var(--md-surface-dim);
-            cursor: pointer;
-            position: relative;
-            transition: all 0.2s;
-        }
-
-        .m3-dropzone:hover, .m3-dropzone.dragover {
-            border-color: var(--md-primary);
-            background-color: var(--md-surface-container-high);
-        }
-
-        .m3-dropzone p {
-            font-size: 0.875rem;
-            color: var(--md-on-surface-variant);
-        }
-
-        .m3-dropzone input[type="file"] {
-            position: absolute;
-            inset: 0;
-            opacity: 0;
-            cursor: pointer;
-        }
-
-        .preview-img {
-            max-width: 100%;
-            max-height: 180px;
-            border-radius: 12px;
-            margin-top: 12px;
-            display: none;
-            object-fit: contain;
-        }
-
-        .m3-btn {
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 100px;
-            background-color: var(--md-primary);
-            color: var(--md-on-primary);
-            font-size: 0.95rem;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-        }
-
-        .m3-btn:hover {
-            box-shadow: 0 4px 12px rgba(142, 186, 150, 0.25);
-            filter: brightness(1.05);
-        }
-
-        .m3-btn:active {
-            transform: scale(0.98);
-        }
-
-        .m3-btn-tonal {
-            background-color: var(--md-surface-container-highest);
-            color: var(--md-on-surface);
-            border: 1px solid var(--md-outline-variant);
-            margin-top: 12px;
-        }
-
-        .capacity-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            color: var(--md-on-surface-variant);
-            margin-top: 8px;
-        }
-
-        .m3-banner {
-            background-color: var(--md-surface-container-high);
-            border: 1px solid var(--md-outline-variant);
-            border-radius: 16px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            font-size: 0.8rem;
-            color: var(--md-on-surface-variant);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            line-height: 1.4;
-        }
-
-        .m3-status {
-            margin-top: 20px;
-            padding: 14px 16px;
-            border-radius: 16px;
-            font-size: 0.875rem;
-            display: none;
-            line-height: 1.4;
-        }
-
-        .m3-status.success {
-            background-color: var(--md-primary-container);
-            color: var(--md-on-primary-container);
-            border: 1px solid var(--md-primary);
-        }
-
-        .m3-status.error {
-            background-color: var(--md-error-container);
-            color: var(--md-error);
-            border: 1px solid var(--md-error);
-        }
-
-        footer {
-            margin-top: 24px;
-            text-align: center;
-            font-size: 0.75rem;
-            color: var(--md-on-surface-variant);
-            line-height: 1.6;
-            max-width: 480px;
-        }
-
-        footer a {
-            color: var(--md-primary);
-            text-decoration: none;
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .subtab-content { display: none; }
-        .subtab-content.active { display: block; }
-
-        .m3-sub-segmented {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            background-color: var(--md-surface-dim);
-            padding: 6px;
-            border-radius: 16px;
-            margin-bottom: 20px;
-            border: 1px solid var(--md-outline-variant);
-        }
-
-        .m3-sub-tab-btn {
-            padding: 8px 6px;
-            border: none;
-            background: transparent;
-            color: var(--md-on-surface-variant);
-            font-size: 0.78rem;
-            font-weight: 600;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            text-align: center;
-        }
-
-        .m3-sub-tab-btn.active {
-            background-color: var(--md-primary-container);
-            color: var(--md-on-primary-container);
-            font-weight: 700;
-        }
-
-        .forensic-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.72rem;
-            text-align: left;
-        }
-
-        .forensic-table th, .forensic-table td {
-            padding: 6px 8px;
-            border-bottom: 1px solid var(--md-outline-variant);
-        }
-
-        .forensic-table th {
-            color: var(--md-primary);
-            font-weight: 700;
-            background: var(--md-surface-container);
-            position: sticky;
-            top: 0;
-        }
-
-        .forensic-stat-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .forensic-stat-card {
-            background: var(--md-surface-container-high);
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid var(--md-outline-variant);
-            text-align: center;
-        }
-
-        .forensic-stat-card .val {
-            font-size: 1.05rem;
-            font-weight: 700;
-            color: var(--md-primary);
-        }
-
-        .forensic-stat-card .lbl {
-            font-size: 0.68rem;
-            color: var(--md-on-surface-variant);
-            margin-top: 2px;
-        }
-    </style>
+    <meta name="description" content="İstemci taraflı LSB görsel steganografisi ve adli bilişim analiz aracı">
+    <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
 
 <main class="m3-card">
     <header>
-        <h1>🌿 StegoCrypt</h1>
-        <p>Resim İçi Steganografi & Görünmez Metin Şifreleme</p>
+        <h1>🌿 StegoCrypt <span>v3.1</span></h1>
+        <p>Resim İçi Steganografi, Kriptografi ve Adli Bilişim Analiz İstasyonu</p>
     </header>
 
-    <!-- Tarayıcı Canvas Bütünlük Uyarısı (Farbling / Parmak İzi Koruması Tespiti) -->
-    <div id="banner-canvas-warning" class="m3-banner" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error); margin-bottom: 16px;">
+    <!-- Canvas Parmak İzi Uyarısı (Noise / Canvas Farbling) -->
+    <div id="banner-canvas-warning" class="m3-banner" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error);">
         <span style="font-size: 1.2rem;">⚠️</span>
         <span style="font-size: 0.82rem; line-height: 1.4;">
-            <b>Tarayıcı Canvas Koruması Tespit Edildi:</b> Tarayıcınız (Brave Shields, Firefox RFP veya gizlilik eklentisi) piksel verilerine yapay gürültü ekliyor. Bu durum steganografik LSB verilerini bozabilir ve şifre çözmeyi engelleyebilir. Lütfen bu site için parmak izi korumasını kapatın.
+            <b>Tarayıcı Canvas Koruması Tespit Edildi:</b> Tarayıcınız (Brave Shields veya gizlilik eklentisi) piksel verilerine yapay gürültü ekliyor. Bu durum LSB verilerini bozabilir. Lütfen bu site için korumayı geçici olarak devre dışı bırakın.
         </span>
     </div>
 
-    <!-- PWA Güncelleme Bildirim Çubuğu -->
-    <div id="banner-pwa-update" class="m3-banner" style="display: none; background: var(--md-primary-container); color: var(--md-on-primary-container); border: 1px solid var(--md-primary); margin-bottom: 16px; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 1.2rem;">🚀</span>
-            <span style="font-size: 0.82rem; font-weight: 600;">StegoCrypt'in yeni sürümü hazır!</span>
-        </div>
-        <button type="button" class="m3-btn" id="btn-pwa-reload" style="width: auto; padding: 6px 14px; font-size: 0.78rem; border-radius: 8px; margin: 0;">Yenile & Güncelle</button>
-    </div>
-
+    <!-- Ana Sekme Menüsü -->
     <nav class="m3-segmented-button">
-        <button class="m3-segment-btn active" id="btn-tab-hide">İçerik Gizle</button>
-        <button class="m3-segment-btn" id="btn-tab-reveal">İçerik Çöz</button>
+        <button class="m3-segment-btn active" id="btn-tab-hide">🔒 İçerik Gizle</button>
+        <button class="m3-segment-btn" id="btn-tab-reveal">🔓 İçerik Çöz</button>
         <button class="m3-segment-btn" id="btn-tab-inspect">🔬 Steganaliz</button>
     </nav>
 
+    <!-- ========================================================================= -->
     <!-- 1. GİZLEME SEKMESİ -->
+    <!-- ========================================================================= -->
     <section id="tab-hide" class="tab-content active">
         <div class="m3-field">
             <label>1. Gizleme Yöntemi Seçin</label>
-            <div class="radio-group">
+            <div class="radio-group" style="flex-direction: row; gap: 12px;">
                 <label class="radio-option">
                     <input type="radio" name="secret-type" value="text" checked id="type-text">
-                    🖼️ Görsele Metin Göm (LSB PNG)
+                    🖼️ Görsele Metin
                 </label>
                 <label class="radio-option">
                     <input type="radio" name="secret-type" value="file" id="type-file">
-                    📁 Görsele Dosya Göm (PDF, ZIP, TXT)
+                    📁 Görsele Dosya
                 </label>
                 <label class="radio-option">
                     <input type="radio" name="secret-type" value="invisible" id="type-invisible">
-                    👻 Görünmez Metin (WhatsApp / Metin Dostu)
+                    👻 Görünmez Metin
                 </label>
             </div>
         </div>
 
-        <!-- Taşıyıcı Görsel Seçimi -->
+        <!-- Taşıyıcı Görsel Alanı -->
         <div class="m3-field" id="container-image-input">
-            <label>Taşıyıcı Görsel</label>
+            <label>Taşıyıcı Görsel (PNG / JPG / WEBP)</label>
             <div class="m3-dropzone" id="dropzone-hide">
-                <p>📷 Görseli buraya sürükleyin veya seçin (PNG, JPG, HEIC, WEBP)</p>
-                <input type="file" id="file-hide" accept="image/*,.heic,.heif" aria-label="Taşıyıcı görsel seçin">
+                <p>📷 Görseli buraya sürükleyin veya seçin</p>
+                <input type="file" id="file-hide" accept="image/*" aria-label="Taşıyıcı görsel seçin">
                 <img id="preview-hide" class="preview-img" alt="Önizleme">
             </div>
-            <div class="capacity-info">
-                <span id="capacity-text">Kapasite: Görsel bekleniyor</span>
-            </div>
-
-            <!-- Dinamik Stego Risk İndeksi Kartı -->
-            <div id="container-risk-indicator" style="display: none; background: var(--md-surface-dim); border-radius: 14px; padding: 12px 14px; border: 1px solid var(--md-outline-variant); margin-top: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--md-primary);">Stego Risk İndeksi</span>
-                    <span id="risk-badge" style="font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 100px; background: var(--md-primary-container); color: var(--md-on-primary-container);">Düşük Risk (%0)</span>
-                </div>
-                <div style="height: 6px; width: 100%; background: var(--md-surface-container-highest); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
-                    <div id="risk-progress-bar" style="height: 100%; width: 0%; background: var(--md-primary); transition: width 0.3s ease, background-color 0.3s ease;"></div>
-                </div>
-                <p id="risk-message" style="font-size: 0.73rem; color: var(--md-on-surface-variant); margin: 0; line-height: 1.35;"></p>
-            </div>
-
-            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 6px; line-height: 1.4;">
-                💡 <b>İletim Kuralı:</b> WhatsApp/Telegram üzerinden gönderirken mutlaka <b>"Belge / Dosya (Kayıpsız)"</b> olarak aktarın. Kayıplı fotoğraf sıkıştırması LSB verisini bozar.
-            </p>
         </div>
 
-        <!-- Gizleme Yoğunluğu & Kapasite Modu -->
+        <!-- Yoğunluk (LSB Modu) -->
         <div class="m3-field" id="container-density-input">
-            <label>Kapasite & Güvenlik Seviyesi</label>
+            <label>Bit Yoğunluğu (Kanal Başına)</label>
             <div class="radio-group" style="flex-direction: row; gap: 16px;">
                 <label class="radio-option">
-                    <input type="radio" name="density-mode" value="1" checked id="density-1lsb">
-                    🟢 1-LSB (Yüksek Gizlilik)
+                    <input type="radio" name="lsb-mode" value="1" checked id="density-1lsb">
+                    🛡️ 1-LSB (Görünmez / Yüksek Güvenlik)
                 </label>
                 <label class="radio-option">
-                    <input type="radio" name="density-mode" value="2" id="density-2lsb">
-                    ⚡ 2-LSB (2x Yüksek Kapasite)
+                    <input type="radio" name="lsb-mode" value="2" id="density-2lsb">
+                    ⚡ 2-LSB (Çift Kapasite)
                 </label>
             </div>
         </div>
 
-        <!-- Piksel Dağıtım Yöntemi -->
+        <!-- Dağıtım Modu -->
         <div class="m3-field" id="container-scatter-input">
-            <label>Piksel Dağıtım Yöntemi</label>
-            <div class="radio-group" style="flex-direction: column; gap: 8px;">
+            <label>Dağıtım Stratejisi</label>
+            <div class="radio-group">
                 <label class="radio-option">
                     <input type="radio" name="scatter-mode" value="adaptive" checked id="scatter-mode-adaptive">
-                    🛡️ İçerik Duyarlı (Kenar / Doku Tabanlı Dama Tahtası Kafes) [Önerilen / Tespit Dirençli]
+                    🌿 İçerik Duyarlı (Doku & Kenar Korumalı - Önerilen)
                 </label>
                 <label class="radio-option">
-                    <input type="radio" name="scatter-mode" value="scatter" id="scatter-mode-prng">
-                    🎲 Homojen Dağınık (PRNG Sıfır İmza / Tam Kapasite)
+                    <input type="radio" name="scatter-mode" value="scattered" id="scatter-mode-prng">
+                    🎲 Homojen Dağınık (Bijective PRNG Permütasyonu)
                 </label>
                 <label class="radio-option">
                     <input type="radio" name="scatter-mode" value="sequential" id="scatter-mode-seq">
-                    📏 Sıralı (Klasik / Legacy)
+                    📏 Sıralı (Format v1 / Klasik)
                 </label>
             </div>
-            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: -4px; line-height: 1.4;">
-                <b>İçerik Duyarlı Dağıtım:</b> Düz alanları (gökyüzü, homojen duvarlar) atlar; veriyi dama tahtası kafesinde çapa pikselleriyle korunan yüksek varyanslı kenarlara yerleştirir.
-            </p>
         </div>
 
-        <!-- Bit Değiştirme Yöntemi (LSB Matching vs LSB Replacement) -->
+        <!-- Stego Risk Endeksi Göstergesi -->
+        <div id="container-risk-indicator" style="display: none; background: var(--md-surface-dim); border: 1px solid var(--md-outline); border-radius: 16px; padding: 14px 16px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: var(--md-primary);">🛡️ Stego Risk Endeksi (SRI)</span>
+                <span id="risk-badge" style="font-size: 0.75rem; font-weight: 700; padding: 2px 10px; border-radius: 100px;">DÜŞÜK</span>
+            </div>
+            <div class="m3-progress-bar-bg" style="height: 6px; margin-bottom: 8px;">
+                <div id="risk-progress-bar" style="height: 100%; width: 10%; background: #4caf50; transition: width 0.3s;"></div>
+            </div>
+            <p id="risk-message" style="font-size: 0.75rem; color: var(--md-on-surface-variant); line-height: 1.4; margin: 0;"></p>
+        </div>
+
+        <!-- Bit Değiştirme Yöntemi -->
         <div class="m3-field" id="container-method-input">
             <label>Bit Değiştirme Yöntemi</label>
             <div class="radio-group" style="flex-direction: row; gap: 16px;">
                 <label class="radio-option">
                     <input type="radio" name="embed-method" value="matching" checked id="method-matching">
-                    🛡️ LSB Matching (±1) [Önerilen / χ² & RS Dirençli]
+                    🛡️ LSB Matching (±1) [χ² & RS Dirençli]
                 </label>
                 <label class="radio-option">
                     <input type="radio" name="embed-method" value="replacement" id="method-replacement">
-                    📏 LSB Replacement (Klasik / Eğitim Amaçlı)
+                    📏 LSB Replacement (Klasik)
                 </label>
             </div>
-            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: -4px; line-height: 1.4;">
-                <b>LSB Matching:</b> Eşleşmeyen bitlerde pikselleri simetrik ±1 kaydırarak Değer Çiftleri (PoVs) asimetrisini engeller; χ² ve RS steganalizini nötralize eder.
-            </p>
         </div>
 
-        <!-- İnkâr Edilebilir Şifreleme (Tuzak Katman Seçeneği) -->
+        <!-- Anahtar Türetme Fonksiyonu (KDF) -->
+        <div class="m3-field" id="container-kdf-input">
+            <label>Anahtar Türetme Fonksiyonu (KDF)</label>
+            <div class="radio-group" style="flex-direction: row; gap: 16px;">
+                <label class="radio-option">
+                    <input type="radio" name="kdf-type" value="pbkdf2" checked id="kdf-pbkdf2">
+                    🛡️ PBKDF2 (600.000 İterasyon - Standart)
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="kdf-type" value="argon2id" id="kdf-argon2id">
+                    ⚡ Argon2id (64 MB RAM - GPU Kaba Kuvvet Korumalı)
+                </label>
+            </div>
+        </div>
+
+        <!-- İnkâr Edilebilir Çift Katman -->
         <div class="m3-field" id="container-deniable-toggle">
-            <label class="radio-option" style="cursor: pointer; user-select: none;">
-                <input type="checkbox" id="check-deniable" style="width: 18px; height: 18px; accent-color: var(--md-primary);">
-                🕵️ İnkâr Edilebilir Çift Katman (Deneysel / Yüksek Tespit Riski)
+            <label class="radio-option">
+                <input type="checkbox" id="check-deniable">
+                🕵️ İnkâr Edilebilir Çift Katman (Tuzak İçerik)
             </label>
-            <p style="font-size: 0.75rem; color: var(--md-on-surface-variant); margin-top: 4px; margin-left: 26px; line-height: 1.4;">
-                Baskı altında teslim edilecek masum kılıf içerik ekler. <i>Dikkat: Çift katman kullanımı yerel varyans farkı veya yüksek manipülasyon nedeniyle steganaliz tespit riskini artırır.</i>
-            </p>
         </div>
 
-        <!-- Tuzak Katman Alanı (Varsayılan Gizli) -->
         <div id="container-deniable-fields" style="display: none; background: var(--md-surface-dim); padding: 14px 16px; border-radius: 16px; margin-bottom: 20px; border: 1px dashed var(--md-outline);">
-            <div style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary); margin-bottom: 12px;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: var(--md-warning); margin-bottom: 10px;">
                 🎭 1. Katman: Tuzak / Kılıf İçerik (Baskı Altında Verilecek)
             </div>
             <div class="m3-field">
                 <label>Tuzak Mesaj</label>
-                <textarea id="text-decoy" placeholder="Örn: Selamlar, yarınki buluşmayı erteleyelim mi?" style="min-height: 60px;"></textarea>
+                <textarea id="text-decoy" placeholder="Zorlama altında gösterilecek masum mesaj..." style="min-height: 60px;"></textarea>
             </div>
             <div class="m3-field" style="margin-bottom: 0;">
                 <label>Tuzak Parola</label>
-                <input type="password" id="pass-decoy" autocomplete="off" placeholder="Zorlama altında verilecek parola">
+                <input type="password" id="pass-decoy" placeholder="Zorlama altında verilecek parola">
             </div>
         </div>
 
-        <!-- Kılıf Metni Alanı (Görünmez Metin Modu İçin) -->
+        <!-- Kılıf Metni (Görünmez Metin Modu) -->
         <div class="m3-field" id="container-cover-input" style="display: none;">
-            <label>Kılıf Mesajınız (Ekranda Görünecek Masum Metin)</label>
-            <input type="text" id="text-cover" placeholder="Örn: Selam kanka, yarın kaçta buluşuyoruz?" value="Selam, nasılsın?">
+            <label>Kılıf Mesajı (Görünecek Masum Metin)</label>
+            <input type="text" id="text-cover" placeholder="Örn: Merhaba, nasılsın?" value="Selam, toplantı notlarını ekte bulabilirsin.">
         </div>
 
-        <!-- Metin Giriş Alanı -->
+        <!-- Gizli Mesaj / Dosya -->
         <div class="m3-field" id="container-text-input">
             <label>Gizli Mesajınız</label>
-            <textarea id="text-hide" placeholder="Resmin veya metnin içine gömmek istediğiniz gizli mesaj..."></textarea>
+            <textarea id="text-hide" placeholder="Görselin veya metnin içine gömmek istediğiniz gizli mesaj..."></textarea>
         </div>
 
-        <!-- Dosya Seçim Alanı -->
         <div class="m3-field" id="container-file-input" style="display: none;">
             <label>Gömmek İstediğiniz Dosya</label>
             <div class="m3-dropzone" id="dropzone-secret-file">
                 <p id="label-secret-file">📁 Bir dosya seçin (PDF, TXT, ZIP...)</p>
-                <input type="file" id="file-secret-input" aria-label="Gömmek istediğiniz gizli dosyayı seçin">
+                <input type="file" id="file-secret-input" aria-label="Gizli dosya seçin">
             </div>
         </div>
 
         <div class="m3-field">
             <label id="label-pass-hide">Şifreleme Parolası</label>
-            <input type="password" id="pass-hide" autocomplete="off" placeholder="İçeriği çözmek için gerekecek parola">
+            <input type="password" id="pass-hide" autocomplete="off" placeholder="İçeriği koruyan ana parola">
         </div>
 
         <button class="m3-btn" id="btn-encrypt">🔐 Şifrele ve Gizle</button>
-        <button class="m3-btn m3-btn-tonal" id="btn-share" style="display: none;">📲 Görseli Paylaş / İndir</button>
-        
-        <!-- Görünmez Metin Çıktı Alanı -->
-        <div class="m3-field" id="container-invisible-output" style="display: none; margin-top: 20px;">
-            <label>Şifrelenmiş Görünmez Metin</label>
-            <textarea id="text-invisible-output" readonly></textarea>
-            <button class="m3-btn m3-btn-tonal" id="btn-copy-invisible" style="margin-top: 10px;">📋 Görünmez Metni Kopyala</button>
-        </div>
+        <button class="m3-btn m3-btn-tonal" id="btn-share" style="display: none; margin-top: 10px;">💾 Şifreli PNG'yi İndir</button>
 
-        <!-- QR Kod Butonu ve Önizleme Alanı -->
-        <button class="m3-btn m3-btn-tonal" id="btn-show-qr" style="display: none; margin-top: 10px;">📱 QR Kod Üret & Göster</button>
-        <div id="container-qr-preview" style="display: none; text-align: center; margin-top: 16px; background: var(--md-surface-dim); padding: 16px; border-radius: 16px; border: 1px solid var(--md-outline);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="font-size: 0.9rem; color: var(--md-primary); margin: 0;">📱 Paylaşılabilir QR Kod</h4>
-                <button type="button" id="btn-close-qr" style="background: none; border: none; color: var(--md-on-surface-variant); cursor: pointer; font-size: 1.1rem; padding: 4px 8px;" aria-label="QR önizlemeyi kapat">✕</button>
-            </div>
-            <div style="background: white; padding: 12px; display: inline-block; border-radius: 12px; margin-bottom: 12px;">
-                <canvas id="canvas-qr" role="img" aria-label="Oluşturulan QR Kod" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></canvas>
-            </div>
-            <div>
-                <button class="m3-btn" id="btn-download-qr" style="padding: 10px 20px; font-size: 0.85rem; width: auto; display: inline-flex;">💾 QR Kodu İndir (PNG)</button>
-            </div>
+        <div class="m3-field" id="container-invisible-output" style="display: none; margin-top: 20px;">
+            <label>Görünmez Metin Çıktısı</label>
+            <textarea id="text-invisible-output" readonly></textarea>
+            <button class="m3-btn m3-btn-tonal" id="btn-copy-invisible" style="margin-top: 10px;">📋 Panoya Kopyala</button>
         </div>
     </section>
 
+    <!-- ========================================================================= -->
     <!-- 2. ÇÖZME SEKMESİ -->
+    <!-- ========================================================================= -->
     <section id="tab-reveal" class="tab-content">
         <div class="m3-banner">
             <span style="font-size: 1.2rem;">💡</span>
-            <span>Görsel şifreleri çözerken dosyanın <b>PNG</b> olduğundan; görünmez metinlerde ise metnin tamamının kopyalandığından emin olun.</span>
+            <span>StegoCrypt v3 akıllı şeffaf çözücü; Format v3 (İçerik Duyarlı/Dağınık), v2 (Sıfır-İmza) ve v1 sıralı paketleri otomatik tanır.</span>
         </div>
 
         <div class="m3-field">
-            <label>1. Çözme Yöntemi Seçin</label>
-            <div class="radio-group">
+            <label>1. Çözme Kaynağı</label>
+            <div class="radio-group" style="flex-direction: row; gap: 16px;">
                 <label class="radio-option">
                     <input type="radio" name="reveal-type" value="image" checked id="reveal-type-image">
-                    🖼️ Şifreli PNG Görseli Çöz
+                    🖼️ PNG Görseli Çöz
                 </label>
                 <label class="radio-option">
                     <input type="radio" name="reveal-type" value="text" id="reveal-type-text">
-                    👻 Görünmez / Yapıştırılan Metni Çöz
+                    👻 Görünmez Metni Çöz
                 </label>
             </div>
         </div>
 
-        <!-- Görsel Yükleme Alanı -->
         <div class="m3-field" id="container-reveal-image">
             <label>Şifreli PNG Görseli</label>
             <div class="m3-dropzone" id="dropzone-reveal">
-                <p>🔍 İçinde gizli veri olan PNG/HEIC görselini seçin</p>
-                <input type="file" id="file-reveal" accept="image/png,image/*,.heic,.heif" aria-label="Şifreli görsel seçin">
+                <p>🔍 İçinde gizli veri olan PNG görselini seçin</p>
+                <input type="file" id="file-reveal" accept="image/png,image/*" aria-label="Şifreli görsel seçin">
                 <img id="preview-reveal" class="preview-img" alt="Önizleme">
             </div>
         </div>
 
-        <!-- Metin Yapıştırma Alanı -->
         <div class="m3-field" id="container-reveal-text" style="display: none;">
-            <label>Şifreli / Görünmez Metni Buraya Yapıştırın</label>
-            <textarea id="text-reveal-input" placeholder="WhatsApp veya mesajlaşma uygulamasından kopyaladığınız metni buraya yapıştırın..."></textarea>
-            
-            <div style="margin-top: 12px; padding: 12px 14px; background: var(--md-surface-dim); border-radius: 12px; border: 1px dashed var(--md-outline);">
-                <span style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--md-primary); margin-bottom: 8px;">📷 VEYA QR KOD GÖRSELİNDEN TARA</span>
-                <div class="m3-dropzone" id="dropzone-qr-scan" style="padding: 12px;">
-                    <p id="label-qr-scan">📷 QR görselini buraya bırakın veya seçin</p>
-                    <input type="file" id="file-qr-scan" accept="image/*,.heic,.heif" aria-label="QR kod görseli seçin">
-                </div>
-            </div>
+            <label>Görünmez veya Şifreli Metni Yapıştırın</label>
+            <textarea id="text-reveal-input" placeholder="WhatsApp veya mesajdan kopyalanan metni buraya yapıştırın..."></textarea>
         </div>
 
         <div class="m3-field">
             <label>2. Parola</label>
-            <input type="password" id="pass-reveal" autocomplete="off" placeholder="Görsel veya metin kilitlenirken kullanılan parola">
+            <input type="password" id="pass-reveal" autocomplete="off" placeholder="Görseli çözen parola">
         </div>
 
         <button class="m3-btn" id="btn-decrypt">🔓 İçeriği Çöz</button>
 
-        <!-- Çözülen Çıktı -->
         <div class="m3-field" style="margin-top: 20px;">
             <textarea id="text-reveal" readonly placeholder="Çözülen metin burada belirecek..." style="display: none;"></textarea>
-            
-            <button class="m3-btn" id="btn-download-file" style="display: none;">💾 Çözülen Dosyayı İndir</button>
-            <button class="m3-btn m3-btn-tonal" id="btn-copy" style="display: none; margin-top: 10px;">📋 Panoya Kopyala (30s Otomatik Silinir)</button>
+            <button class="m3-btn" id="btn-download-file" style="display: none; margin-top: 10px;">💾 Çözülen Dosyayı İndir</button>
+            <button class="m3-btn m3-btn-tonal" id="btn-copy" style="display: none; margin-top: 10px;">📋 Panoya Kopyala (30s Otomatik Temizlenir)</button>
             <button class="m3-btn m3-btn-tonal" id="btn-clear-output" style="display: none; margin-top: 10px;">🗑️ Çıktıyı Temizle</button>
         </div>
     </section>
 
-    <!-- 3. STEGANALİZ & FORENSİK TRİYAJ SEKMESİ -->
+    <!-- ========================================================================= -->
+    <!-- 3. STEGANALİZ & ADLİ BİLİŞİM WORKBENCH -->
+    <!-- ========================================================================= -->
     <section id="tab-inspect" class="tab-content">
-        <!-- Workbench Alt Sekme Menüsü (2x2 Grid) -->
         <div class="m3-sub-segmented">
             <button type="button" class="m3-sub-tab-btn active" id="btn-subtab-lsb">🔬 LSB Steganaliz</button>
-            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-binary">📦 İkili Yapı Triyajı</button>
-            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-diff">⚖️ Görsel Diff (PSNR)</button>
+            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-binary">📦 İkili Triyaj</button>
+            <button type="button" class="m3-sub-tab-btn" id="btn-subtab-diff">⚖️ Görsel Diff</button>
             <button type="button" class="m3-sub-tab-btn" id="btn-subtab-zerowidth">👻 Görünmez Metin</button>
             <button type="button" class="m3-sub-tab-btn" id="btn-subtab-zsteg" style="grid-column: span 2;">🕵️ zsteg Derin Tarama (56 Kombinasyon)</button>
         </div>
 
-        <!-- 3.A LSB & STEGANALİZ SUBTAB -->
+        <!-- 3.A LSB & STEGANALİZ -->
         <div id="subtab-content-lsb" class="subtab-content active">
-            <div class="m3-banner">
-                <span style="font-size: 1.2rem;">🔬</span>
-                <span>Görselin en alt bitlerini (LSB) röntgen ve <b>χ² (Chi-Square)</b> ısı haritasıyla inceleyin; <b>Fridrich RS</b> steganaliziyle gizli veri yükünü tespit edin.</span>
-            </div>
-
             <div class="m3-field">
                 <label>Analiz Edilecek Görsel</label>
                 <div class="m3-dropzone" id="dropzone-inspect">
-                    <p>🔍 Görseli buraya sürükleyin veya seçin (PNG / JPG / HEIC)</p>
-                    <input type="file" id="file-inspect" accept="image/*,.heic,.heif" aria-label="Steganaliz edilecek görseli seçin">
+                    <p>🔍 Görseli buraya bırakın veya seçin (PNG / JPG)</p>
+                    <input type="file" id="file-inspect" accept="image/*" aria-label="Steganaliz edilecek görsel">
                 </div>
             </div>
 
             <div id="inspect-controls" style="display: none;">
                 <div class="m3-field">
-                    <label>Görünüm Modu</label>
-                    <div class="radio-group" style="flex-direction: row; gap: 16px;">
-                        <label class="radio-option">
-                            <input type="radio" name="inspect-view-mode" value="bitplane" checked id="view-mode-bitplane">
-                            🔍 LSB Bit Düzlemi (Röntgen)
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="inspect-view-mode" value="heatmap" id="view-mode-heatmap">
-                            🌡️ χ² Bölgesel Isı Haritası (32x32)
-                        </label>
-                    </div>
-                </div>
-
-                <div class="m3-field" id="container-inspect-channel">
-                    <label>Röntgen Filtresi & Kanal</label>
-                    <div class="radio-group" style="flex-direction: row; flex-wrap: wrap; gap: 8px;">
-                        <label class="radio-option">
-                            <input type="radio" name="inspect-channel" value="all" checked id="inspect-chan-all">
-                            🌈 RGB
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="inspect-channel" value="red" id="inspect-chan-red">
-                            🔴 Kırmızı
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="inspect-channel" value="green" id="inspect-chan-green">
-                            🟢 Yeşil
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="inspect-channel" value="blue" id="inspect-chan-blue">
-                            🔵 Mavi
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Görsel Önizleme Canvas -->
-                <div class="m3-field">
-                    <label id="inspect-canvas-label">LSB Bit Düzlemi Röntgeni (Bit 0)</label>
-                    <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
-                        <canvas id="canvas-inspect" role="img" aria-label="LSB Bit Düzlemi Röntgeni veya Isı Haritası" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
-                    </div>
-                </div>
-
-                <!-- 1. Chi-Square Analiz Rapor Kartı -->
-                <div id="inspect-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">1. χ² (Chi-Square) Steganaliz Testi</span>
-                        <span id="inspect-prob-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
-                    </div>
-                    <h4 id="inspect-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Görsel Analiz Ediliyor...</h4>
-                    <p id="inspect-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
-                    <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
-                        <span id="inspect-stats">χ²: 0.00 | Serbestlik Derecesi: 0</span>
-                    </div>
-                </div>
-
-                <!-- 2. Fridrich RS Steganaliz Rapor Kartı -->
-                <div id="inspect-rs-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">2. Fridrich RS (Regular/Singular) Steganaliz</span>
-                        <span id="inspect-rs-badge" style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 4px 10px; border-radius: 100px;">%0.0</span>
-                    </div>
-                    <h4 id="inspect-rs-verdict" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">RS Analizi Yapılıyor...</h4>
-                    <p id="inspect-rs-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
-                    <div style="font-size: 0.75rem; color: var(--md-on-surface-variant); opacity: 0.75; margin-top: 8px;">
-                        <span id="inspect-rs-stats">RM: 0.00% | SM: 0.00% | R-M: 0.00% | S-M: 0.00%</span>
-                    </div>
-                </div>
-
-                <!-- Steganaliz Karşılaştırma & Bilgi Notu -->
-                <div style="background: var(--md-surface-container-high); border-radius: 16px; padding: 12px 16px; margin-top: 16px; font-size: 0.78rem; color: var(--md-on-surface-variant); line-height: 1.45; border: 1px solid var(--md-outline-variant);">
-                    💡 <b>Bulgu & Akademik Karşılaştırma:</b><br>
-                    • <b>LSB Replacement:</b> Değer Çiftleri (PoVs) asimetrisi ve $R_M &lt; R_{-M}$ kayması nedeniyle hem χ² hem de RS tarafından yüksek doğrulukla tespit edilir.<br>
-                    • <b>LSB Matching (±1):</b> Pikselleri eşit olasılıkla +1/-1 kaydırdığı için $R_M \approx R_{-M}$ ve $S_M \approx S_{-M}$ simetrisi korunur; χ² ve RS tespit oranı <b>≈ %0</b> seviyesinde kalır.
-                </div>
-            </div>
-        </div>
-
-        <!-- 3.B İKİLİ YAPI & DOSYA TRİYAJI (BINARY INSPECTOR) SUBTAB -->
-        <div id="subtab-content-binary" class="subtab-content">
-            <div class="m3-banner">
-                <span style="font-size: 1.2rem;">📦</span>
-                <span>PNG ve JPEG dosyalarının ikili başlıklarını inceleyin; <b>IEND/EOI sonrası enjekte edilen ekleri (Trailing Overlay / ZIP Polyglot)</b> ve bozuk CRC'leri tespit edin.</span>
-            </div>
-
-            <div class="m3-field">
-                <label>İncelenecek Dosya</label>
-                <div class="m3-dropzone" id="dropzone-binary">
-                    <p id="label-binary-file">🔍 PNG veya JPEG dosyasını buraya sürükleyin veya seçin</p>
-                    <input type="file" id="file-binary" accept="image/png,image/jpeg,image/*,.png,.jpg,.jpeg" aria-label="İkili analizi yapılacak görseli seçin">
-                </div>
-            </div>
-
-            <div id="container-binary-results" style="display: none;">
-                <!-- Özet Kartı -->
-                <div id="binary-summary-card" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span id="binary-format-badge" style="font-size: 0.8rem; font-weight: 700; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 3px 8px; border-radius: 8px;">PNG</span>
-                        <span id="binary-size-badge" style="font-size: 0.75rem; color: var(--md-on-surface-variant);">0 KB</span>
-                    </div>
-                    <h4 id="binary-verdict-title" style="font-size: 0.95rem; margin-bottom: 6px; color: var(--md-on-surface);">Dosya Analiz Edildi</h4>
-                    <p id="binary-verdict-desc" style="font-size: 0.8rem; color: var(--md-on-surface-variant); line-height: 1.4;"></p>
-                </div>
-
-                <!-- Overlay / Trailing Injection Uyarı Kartı -->
-                <div id="binary-overlay-card" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;">
-                    <div style="font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                        🚨 IEND / EOI Sonrası Ek Veri Tespit Edildi! (Overlay Injection)
-                    </div>
-                    <p id="binary-overlay-details" style="font-size: 0.78rem; line-height: 1.4; margin-bottom: 8px;"></p>
-                    <div style="font-size: 0.72rem; font-weight: 600; margin-bottom: 4px;">İlk 32 Bayt Hex Görünümü:</div>
-                    <pre id="binary-overlay-hex" style="background: rgba(0,0,0,0.4); color: #fff; padding: 8px 10px; border-radius: 8px; font-family: monospace; font-size: 0.72rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 0;"></pre>
-                    <button type="button" class="m3-btn m3-btn-tonal" id="btn-download-overlay" style="margin-top: 10px; background: rgba(0,0,0,0.25); color: #fff; border-color: rgba(255,255,255,0.3);">💾 Tespit Edilen Eki İndir (Trailing Payload)</button>
-                </div>
-
-                <!-- Chunk / Marker Tablosu -->
-                <div style="background: var(--md-surface-dim); border-radius: 16px; padding: 14px 16px; border: 1px solid var(--md-outline);">
-                    <h4 style="font-size: 0.85rem; color: var(--md-primary); margin-bottom: 8px;">📋 Başlık & Segment / Chunk Tablosu</h4>
-                    <div style="max-height: 220px; overflow-y: auto; border: 1px solid var(--md-outline-variant); border-radius: 10px;">
-                        <table class="forensic-table" id="table-binary-chunks">
-                            <thead>
-                                <tr>
-                                    <th>Tip</th>
-                                    <th>Boyut</th>
-                                    <th>Ofset</th>
-                                    <th>CRC / Durum</th>
-                                    <th>Detay</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-binary-chunks">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 3.C GÖRSEL KARŞILAŞTIRMA & FARK ANALİZİ (DIFF ENGINE) SUBTAB -->
-        <div id="subtab-content-diff" class="subtab-content">
-            <div class="m3-banner">
-                <span style="font-size: 1.2rem;">⚖️</span>
-                <span>Orijinal Taşıyıcı (Cover) ve Şifreli (Stego) görselleri piksel düzeyinde karşılaştırın. <b>PSNR (dB)</b> ve <b>SSIM</b> yapısal benzerlik metrikleriyle LSB değişimlerini görselleştirin.</span>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-                <!-- 1. Cover Dropzone -->
-                <div class="m3-dropzone" id="dropzone-diff-cover" style="padding: 12px 8px;">
-                    <p id="label-diff-cover" style="font-size: 0.75rem;">1. Orijinal (Cover)</p>
-                    <input type="file" id="file-diff-cover" accept="image/*,.heic,.heif" aria-label="Orijinal taşıyıcı görseli seçin">
-                    <img id="preview-diff-cover" class="preview-img" alt="Cover Önizleme" style="max-height: 100px;">
-                </div>
-                <!-- 2. Stego Dropzone -->
-                <div class="m3-dropzone" id="dropzone-diff-stego" style="padding: 12px 8px;">
-                    <p id="label-diff-stego" style="font-size: 0.75rem;">2. Şifreli (Stego)</p>
-                    <input type="file" id="file-diff-stego" accept="image/*,.heic,.heif" aria-label="Şifreli görseli seçin">
-                    <img id="preview-diff-stego" class="preview-img" alt="Stego Önizleme" style="max-height: 100px;">
-                </div>
-            </div>
-
-            <button type="button" class="m3-btn" id="btn-run-diff" style="margin-bottom: 16px;">⚖️ Görselleri Karşılaştır & Farkı Analiz Et</button>
-
-            <div id="container-diff-results" style="display: none;">
-                <!-- Metrik Kartları (2x2) -->
-                <div class="forensic-stat-grid">
-                    <div class="forensic-stat-card">
-                        <div class="val" id="diff-psnr-val">-- dB</div>
-                        <div class="lbl">PSNR (Sinyal/Gürültü)</div>
-                    </div>
-                    <div class="forensic-stat-card">
-                        <div class="val" id="diff-ssim-val">--</div>
-                        <div class="lbl">SSIM (Yapısal Benzerlik)</div>
-                    </div>
-                    <div class="forensic-stat-card">
-                        <div class="val" id="diff-mse-val">--</div>
-                        <div class="lbl">MSE (Hata Kareleri Ort.)</div>
-                    </div>
-                    <div class="forensic-stat-card">
-                        <div class="val" id="diff-changed-val">--</div>
-                        <div class="lbl">Değişen Piksel Oranı</div>
-                    </div>
-                </div>
-
-                <!-- Görünüm Seçenekleri -->
-                <div class="m3-field" style="margin-top: 14px;">
-                    <label>Fark Görünüm Modu</label>
+                    <label>Röntgen Filtresi & Görünüm</label>
                     <div class="radio-group" style="flex-direction: row; gap: 12px;">
-                        <label class="radio-option">
-                            <input type="radio" name="diff-view-mode" value="amplified" checked id="diff-mode-amplified">
-                            🔍 Büyütülmüş Fark
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="diff-view-mode" value="lsb" id="diff-mode-lsb">
-                            ✨ LSB Değişimleri
-                        </label>
+                        <label class="radio-option"><input type="radio" name="inspect-view-mode" value="bitplane" checked id="view-mode-bitplane"> Bit Düzlemi 0 (LSB)</label>
+                        <label class="radio-option"><input type="radio" name="inspect-view-mode" value="heatmap" id="view-mode-heatmap"> χ² Isı Haritası (32x32)</label>
                     </div>
                 </div>
 
-                <!-- Büyütme Çarpanı Slider -->
-                <div id="container-diff-slider" style="margin-bottom: 12px;">
-                    <label style="font-size: 0.78rem; color: var(--md-primary); font-weight: 600; display: block; margin-bottom: 4px;">
-                        Fark Büyütme Çarpanı: <span id="diff-amp-label">30x</span>
-                    </label>
-                    <input type="range" id="diff-amp-slider" min="5" max="100" value="30" step="5" style="width: 100%; accent-color: var(--md-primary);">
+                <div class="m3-field">
+                    <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
+                        <canvas id="canvas-inspect" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
+                    </div>
                 </div>
 
-                <!-- Canvas -->
-                <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline);">
-                    <canvas id="canvas-diff" role="img" aria-label="Görsel Fark Haritası" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; image-rendering: pixelated;"></canvas>
-                </div>
-            </div>
-        </div>
+                <!-- Analiz Rapor Kartı -->
+                <div id="inspect-report" style="background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">1. χ² (Chi-Square) Testi</span>
+                        <span id="inspect-prob-badge" style="font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 100px; background: var(--md-primary-container); color: var(--md-on-primary-container);">%0.0</span>
+                    </div>
+                    <h4 id="inspect-verdict" style="font-size: 0.95rem; margin-bottom: 6px;">Analiz Bekleniyor...</h4>
+                    <p id="inspect-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant);"></p>
 
-        <!-- 3.D GÖRÜNMEZ METİN & ASCII SMUGGLING (ZERO-WIDTH) SUBTAB -->
-        <div id="subtab-content-zerowidth" class="subtab-content">
-            <div class="m3-banner">
-                <span style="font-size: 1.2rem;">👻</span>
-                <span>Metin içindeki gizli sıfır-genişlikli karakterleri (ZWSP, ZWNJ, ZWJ), Truva Atı <b>BiDi (RLO)</b> kontrollerini ve <b>Unicode Düzlem 14 ASCII Smuggling</b> etiketlerini tespit edip çözün.</span>
-            </div>
+                    <hr style="border: none; border-top: 1px solid var(--md-outline-variant); margin: 12px 0;">
 
-            <div class="m3-field">
-                <label>İncelenecek Şüpheli Metin</label>
-                <textarea id="text-zerowidth-input" placeholder="Şüpheli metni buraya yapıştırın (ChatGPT istemleri, sosyal medya mesajları, kod blokları)..." style="min-height: 85px;"></textarea>
-            </div>
-
-            <button type="button" class="m3-btn" id="btn-analyze-zerowidth">🔍 Görünmez Karakterleri Tara</button>
-
-            <div id="container-zerowidth-results" style="display: none; margin-top: 16px;">
-                <!-- Durum Başlık Kartı -->
-                <div id="zerowidth-verdict-banner" class="m3-banner"></div>
-
-                <!-- Detay Rozetleri (Pills) -->
-                <div id="zerowidth-pills-grid" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;"></div>
-
-                <!-- ASCII Smuggling Çözülen İçerik -->
-                <div id="container-smuggled-ascii" style="display: none; margin-bottom: 14px;">
-                    <label style="font-size: 0.8rem; font-weight: 700; color: var(--md-primary); display: block; margin-bottom: 6px;">
-                        🔓 Çözülen ASCII Smuggling Yükü
-                    </label>
-                    <textarea id="text-smuggled-payload" readonly style="min-height: 60px; font-family: monospace; color: var(--md-primary); background: #000; border-color: var(--md-primary);"></textarea>
-                </div>
-
-                <!-- BiDi Trojan Uyarısı -->
-                <div id="container-bidi-warning" style="display: none; background: var(--md-error-container); color: var(--md-on-error); border: 1px solid var(--md-error); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.78rem; line-height: 1.4;">
-                    ⚠️ <b>BiDi Trojan Tespit Edildi:</b> Metinde Right-to-Left Override (RLO) veya ters yönde metin kontrol karakterleri bulundu! Bu karakterler zararlı dosya uzantılarını veya kod satırlarını ters çevirerek gizlemek için kullanılır.
-                </div>
-
-                <!-- Görselleştirilmiş Karakter Haritası -->
-                <div class="m3-field" style="margin-bottom: 14px;">
-                    <label>👁️ Görselleştirilmiş Karakter Haritası</label>
-                    <div id="zerowidth-highlighted-box" style="background: var(--md-surface-dim); border: 1px solid var(--md-outline); border-radius: 12px; padding: 12px; font-size: 0.85rem; line-height: 1.6; max-height: 140px; overflow-y: auto; word-break: break-all;"></div>
-                </div>
-
-                <!-- Temizlenmiş Metin -->
-                <div class="m3-field" style="margin-bottom: 0;">
-                    <label>🧹 Temizlenmiş Metin (Görünmez Karakterlerden Arındırılmış)</label>
-                    <textarea id="text-zerowidth-clean" readonly style="min-height: 60px;"></textarea>
-                    <button type="button" class="m3-btn m3-btn-tonal" id="btn-copy-clean-text" style="margin-top: 8px;">📋 Temizlenmiş Metni Kopyala</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--md-primary);">2. Fridrich RS Steganaliz Testi</span>
+                        <span id="inspect-rs-badge" style="font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 100px; background: var(--md-primary-container); color: var(--md-on-primary-container);">%0.0</span>
+                    </div>
+                    <h4 id="inspect-rs-verdict" style="font-size: 0.95rem; margin-bottom: 6px;">RS Hesaplanıyor...</h4>
+                    <p id="inspect-rs-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant);"></p>
                 </div>
             </div>
         </div>
 
-        <!-- 3.E zsteg DERİN TARAMA (56 KOMBİNASYON) SUBTAB -->
-        <div id="subtab-content-zsteg" class="subtab-content">
-            <div class="m3-banner">
-                <span style="font-size: 1.2rem;">🕵️</span>
-                <span><b>zsteg</b> tarzı 56-kombinasyon derin bit düzlemi tarayıcısı. Kanallar (R, G, B, RGB, BGR, RGBA, ABGR), 1b/2b derinlik, LSB/MSB ve XY/YX yönlerinde dosya imzalarını (ZIP, PDF, PNG, JPEG, GIF vb.), CTF bayraklarını (<code>flag{...}</code>, <code>ctf{...}</code>) ve açık metinleri arar.</span>
-            </div>
-
+        <!-- 3.B İKİLİ TRİYAJ -->
+        <div id="subtab-content-binary" class="subtab-content">
             <div class="m3-field">
-                <label>Taranacak Görsel</label>
-                <div class="m3-dropzone" id="dropzone-zsteg">
-                    <p id="label-zsteg-file">🔍 Görseli buraya sürükleyin veya seçin (PNG / BMP / WebP)</p>
-                    <input type="file" id="file-zsteg" accept="image/*,.heic,.heif" aria-label="zsteg ile taranacak görseli seçin">
-                    <img id="preview-zsteg" class="preview-img" alt="zsteg Önizleme" style="max-height: 120px;">
+                <label>İkili İnceleme Dosyası</label>
+                <div class="m3-dropzone" id="dropzone-binary">
+                    <p>📦 PNG veya JPEG dosyasını buraya bırakın</p>
+                    <input type="file" id="file-binary" accept="image/png,image/jpeg,image/*" aria-label="İkili analiz dosyası">
                 </div>
             </div>
 
-            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                <button type="button" class="m3-btn" id="btn-start-zsteg" style="flex: 1;">🔍 56 Kombinasyonu Derinlemesine Tara</button>
-                <button type="button" class="m3-btn m3-btn-tonal" id="btn-stop-zsteg" style="display: none; width: auto; padding: 12px 18px; margin: 0; background: var(--md-error-container); color: var(--md-on-error); border-color: var(--md-error);">⏹️ Durdur</button>
-            </div>
-
-            <!-- İlerleme Çubuğu & Durum -->
-            <div id="container-zsteg-progress" style="display: none; margin-bottom: 16px; background: var(--md-surface-dim); border-radius: 12px; padding: 12px; border: 1px solid var(--md-outline-variant);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span id="zsteg-status-label" style="font-size: 0.78rem; font-weight: 600; color: var(--md-primary);">Tarama hazırlanıyor...</span>
-                    <span id="zsteg-pct-label" style="font-size: 0.78rem; font-weight: 700; color: var(--md-on-surface);">%0</span>
+            <div id="binary-report" style="display: none; background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span id="binary-format-badge" style="font-size: 0.8rem; font-weight: 700; color: var(--md-primary);">FORMAT: PNG</span>
+                    <span id="binary-size-lbl" style="font-size: 0.8rem; color: var(--md-on-surface-variant);">0 bayt</span>
                 </div>
-                <div style="width: 100%; height: 6px; background: var(--md-surface-container-highest); border-radius: 4px; overflow: hidden;">
-                    <div id="zsteg-progress-bar" style="width: 0%; height: 100%; background: var(--md-primary); border-radius: 4px; transition: width 0.15s ease;"></div>
-                </div>
-            </div>
+                <h4 id="binary-verdict" style="font-size: 0.95rem; margin-bottom: 6px;">Analiz Tamamlandı</h4>
+                <p id="binary-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-bottom: 12px;"></p>
 
-            <!-- Sonuç Tablosu -->
-            <div id="container-zsteg-results" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="font-size: 0.85rem; color: var(--md-primary); margin: 0;">📋 Bulunan Olası Stego / Dosya Akışları</h4>
-                    <span id="zsteg-findings-count" style="font-size: 0.75rem; color: var(--md-on-primary-container); background: var(--md-primary-container); padding: 2px 8px; border-radius: 100px;">0 Bulgu</span>
-                </div>
-
-                <div id="zsteg-empty-state" style="display: none; text-align: center; padding: 24px 16px; background: var(--md-surface-dim); border-radius: 12px; border: 1px solid var(--md-outline-variant); color: var(--md-on-surface-variant); font-size: 0.8rem;">
-                    🛡️ İncelenen 56 kombinasyonun hiçbirinde bilinen dosya imzası veya belirgin metin kalıbı bulunamadı.
-                </div>
-
-                <div id="zsteg-table-wrapper" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--md-outline-variant); border-radius: 10px; background: var(--md-surface-dim);">
-                    <table class="forensic-table" id="table-zsteg-results">
+                <div id="binary-chunks-container">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--md-primary);">Chunk Yapısı</label>
+                    <table class="forensic-table" id="binary-chunks-table">
                         <thead>
-                            <tr>
-                                <th>Kombinasyon</th>
-                                <th>Tip</th>
-                                <th>Önizleme / Detay</th>
-                                <th>İtibar</th>
-                                <th>İndir</th>
-                            </tr>
+                            <tr><th>Tip</th><th>Boyut</th><th>Ofset</th><th>CRC</th></tr>
                         </thead>
-                        <tbody id="tbody-zsteg-results">
-                        </tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
         </div>
+
+        <!-- 3.C GÖRSEL DİFF (PSNR / SSIM) -->
+        <div id="subtab-content-diff" class="subtab-content">
+            <div class="m3-field">
+                <label>1. Orijinal Referans Görsel</label>
+                <div class="m3-dropzone" id="dropzone-diff-orig">
+                    <p id="lbl-diff-orig">📷 Orijinal temiz görseli seçin</p>
+                    <input type="file" id="file-diff-orig" accept="image/*">
+                </div>
+            </div>
+
+            <div class="m3-field">
+                <label>2. Şüpheli / Stego Görsel</label>
+                <div class="m3-dropzone" id="dropzone-diff-stego">
+                    <p id="lbl-diff-stego">📷 Şüpheli stego görselini seçin</p>
+                    <input type="file" id="file-diff-stego" accept="image/*">
+                </div>
+            </div>
+
+            <button class="m3-btn" id="btn-compare-diff">⚖️ Görselleri Karşılaştır & Diff Üret</button>
+
+            <div id="diff-results" style="display: none; margin-top: 16px;">
+                <div class="forensic-grid">
+                    <div class="forensic-stat-card"><div class="val" id="diff-val-psnr">∞</div><div class="lbl">PSNR (dB)</div></div>
+                    <div class="forensic-stat-card"><div class="val" id="diff-val-ssim">1.000</div><div class="lbl">SSIM</div></div>
+                    <div class="forensic-stat-card"><div class="val" id="diff-val-changed">0</div><div class="lbl">Değişen Piksel</div></div>
+                </div>
+                <div style="text-align: center; background: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--md-outline); margin-top: 10px;">
+                    <canvas id="canvas-diff" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3.D GÖRÜNMEZ METİN DEDEKTÖRÜ -->
+        <div id="subtab-content-zerowidth" class="subtab-content">
+            <div class="m3-field">
+                <label>Şüpheli Metni Girin</label>
+                <textarea id="text-detect-input" placeholder="Sosyal medya, chat veya dokümandan kopyalanan şüpheli metin..."></textarea>
+            </div>
+            <button class="m3-btn" id="btn-detect-zerowidth">🔍 Görünmez Karakterleri Tara</button>
+
+            <div id="zerowidth-report" style="display: none; background: var(--md-surface-dim); border-radius: 16px; padding: 16px; border: 1px solid var(--md-outline); margin-top: 16px;">
+                <h4 id="zw-verdict" style="font-size: 0.95rem; margin-bottom: 6px;">Sonuç</h4>
+                <p id="zw-details" style="font-size: 0.8rem; color: var(--md-on-surface-variant);"></p>
+                <div id="zw-smuggled-box" style="display: none; margin-top: 10px; background: var(--md-surface-container-high); padding: 10px; border-radius: 8px;">
+                    <label style="font-size: 0.75rem; color: var(--md-primary); font-weight: 700;">Açığa Çıkarılan Gizli Metin:</label>
+                    <p id="zw-smuggled-text" style="font-family: monospace; color: #fff; font-size: 0.9rem; margin-top: 4px; word-break: break-all;"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3.E ZSTEG DERİN TARAMA -->
+        <div id="subtab-content-zsteg" class="subtab-content">
+            <div class="m3-banner">
+                <span style="font-size: 1.2rem;">🕵️</span>
+                <span><b>zsteg Motoru:</b> Tüm kanal (RGB/BGR), bit derinliği (1..8) ve sıra (LSB/MSB) permütasyonlarını otomatik tarar; CTF bayrakları ve dosya imzalarını bulur.</span>
+            </div>
+
+            <div class="m3-field">
+                <label>Taranacak PNG Görseli</label>
+                <div class="m3-dropzone" id="dropzone-zsteg">
+                    <p>🕵️ PNG görselini seçin</p>
+                    <input type="file" id="file-zsteg" accept="image/png,image/*">
+                </div>
+            </div>
+
+            <button class="m3-btn" id="btn-scan-zsteg">🚀 56 Kombinasyon Derin Taramayı Başlat</button>
+
+            <div id="zsteg-results" style="display: none; margin-top: 16px;">
+                <table class="forensic-table" id="zsteg-table">
+                    <thead>
+                        <tr><th>Kombinasyon</th><th>Bulgu / İmza</th><th>Örnek Metin</th><th>İşlem</th></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
     </section>
 
+    <!-- İlerleme Çubuğu -->
+    <div class="m3-progress-container" id="progress-container">
+        <div class="m3-progress-bar-bg">
+            <div class="m3-progress-bar-fill" id="progress-bar-fill"></div>
+        </div>
+        <div class="m3-progress-text">
+            <span id="progress-text-label">İşleniyor...</span>
+            <span id="progress-text-percent">%0</span>
+        </div>
+    </div>
+
+    <!-- Durum Mesajı -->
     <div id="status-msg" class="m3-status"></div>
+
+    <footer>
+        <p>🔒 Tamamen İstemci Taraflı (Sıfır Sunucu İletişimi) • Askeri Düzey Kriptografi</p>
+        <p>AES-256-GCM + ChaCha20-Poly1305 • Argon2id / PBKDF2 600.000 • Fridrich RS Analizi</p>
+    </footer>
 </main>
 
-<!-- Eğitim ve Lisans Dipnotu -->
-<footer>
-    <p>⚠️ Bu uygulama sadece <b>eğitim, araştırma ve eğlence</b> amaçlı geliştirilmiştir.</p>
-    <p>Açık kaynak kodlu olup <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT Lisansı</a> ile sunulmuştur.</p>
-</footer>
-
-<script type="module" src="js/app.js"></script>
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>
