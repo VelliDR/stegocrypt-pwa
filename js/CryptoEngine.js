@@ -8,13 +8,15 @@
 export const CryptoEngine = {
     async deriveKey(password, salt) {
         const enc = new TextEncoder();
+        const pwBytes = enc.encode(password);
         const keyMaterial = await crypto.subtle.importKey(
             "raw",
-            enc.encode(password),
+            pwBytes,
             { name: "PBKDF2" },
             false,
             ["deriveKey"]
         );
+        pwBytes.fill(0); // Best-effort zeroization: parolanın bayt kopyasını derhal sıfırla
 
         return crypto.subtle.deriveKey(
             {
@@ -43,13 +45,15 @@ export const CryptoEngine = {
      */
     async deriveMasterKeyV3(password, salt, iterations = 600000) {
         const enc = new TextEncoder();
+        const pwBytes = enc.encode(password);
         const keyMaterial = await crypto.subtle.importKey(
             "raw",
-            enc.encode(password),
+            pwBytes,
             { name: "PBKDF2" },
             false,
             ["deriveBits"]
         );
+        pwBytes.fill(0); // Best-effort zeroization
 
         const masterBits = await crypto.subtle.deriveBits(
             {
@@ -62,13 +66,18 @@ export const CryptoEngine = {
             256
         );
 
-        return crypto.subtle.importKey(
+        const hkdfKey = await crypto.subtle.importKey(
             "raw",
             masterBits,
             "HKDF",
             false,
             ["deriveBits", "deriveKey"]
         );
+
+        // masterBits TypedArray kopyasını sıfırla
+        new Uint8Array(masterBits).fill(0);
+
+        return hkdfKey;
     },
 
     /**

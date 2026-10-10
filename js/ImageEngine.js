@@ -47,6 +47,60 @@ export const ImageEngine = {
     },
 
     /**
+     * Taşıyıcı görsel kanal güvenliğini ve kayıplı sıkıştırma riskini denetler.
+     * (Sosyal medya platformları, JPEG/WebP formatları vb.)
+     * @param {File|Blob} file
+     * @returns {{
+     *   isLossy: boolean,
+     *   isSocialMedia: boolean,
+     *   format: string,
+     *   warning: string|null,
+     *   recommendation: string|null
+     * }}
+     */
+    checkCarrierSafety(file) {
+        if (!file) {
+            return { isLossy: false, isSocialMedia: false, format: 'unknown', warning: null, recommendation: null };
+        }
+        const name = (file.name || '').toLowerCase();
+        const type = (file.type || '').toLowerCase();
+
+        const isJpeg = type === 'image/jpeg' || /\.(jpe?g)$/i.test(name);
+        const isWebp = type === 'image/webp' || /\.webp$/i.test(name);
+        const isSocial = /whatsapp|telegram|instagram|messenger|discord|signal|twitter|facebook|viber/i.test(name) ||
+                         /img[-_]\d{8}[-_]wa\d+/i.test(name);
+
+        if (isJpeg || isWebp) {
+            const fmt = isJpeg ? 'JPEG' : 'WebP';
+            return {
+                isLossy: true,
+                isSocialMedia: isSocial,
+                format: fmt,
+                warning: `Seçilen görsel kayıplı ${fmt} formatında. Kayıplı sıkıştırma pikselleri değiştirdiği için mekânsal LSB verilerini bozar; şifre çözülemeyebilir.`,
+                recommendation: 'Lütfen şifreli orijinal, kayıpsız PNG dosyasını kullanın.'
+            };
+        }
+
+        if (isSocial) {
+            return {
+                isLossy: false,
+                isSocialMedia: true,
+                format: 'PNG (Sosyal Medya İsimli)',
+                warning: 'Görsel dosya adı bir sosyal medya veya mesajlaşma platformuna ait görünüyor. Eğer dosya "Fotoğraf" olarak iletildiyse sunucu tarafında kayıplı sıkıştırılmış olabilir.',
+                recommendation: 'Şifre çözülemezse, göndericiden görseli "Belge / Dosya (Kayıpsız)" olarak tekrar iletmesini isteyin.'
+            };
+        }
+
+        return {
+            isLossy: false,
+            isSocialMedia: false,
+            format: type || 'image/png',
+            warning: null,
+            recommendation: null
+        };
+    },
+
+    /**
      * HEIC/HEIF dosyasını saf istemci tarafında PNG Blob'a dönüştürür.
      * @param {File|Blob} file
      * @param {(status: string) => void} [onProgress]

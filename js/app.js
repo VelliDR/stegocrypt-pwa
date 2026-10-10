@@ -219,10 +219,12 @@ function getDistributionMode() {
 }
 
 let riskCalcTimer = null;
+let lastStegoRisk = null;
 async function updateStegoRiskUI() {
     if (!containerRiskIndicator) return;
     if (!currentHideCanvasData || typeInvisibleRadio.checked) {
         containerRiskIndicator.style.display = 'none';
+        lastStegoRisk = null;
         return;
     }
 
@@ -236,6 +238,7 @@ async function updateStegoRiskUI() {
 
     if (payloadBytes <= 0) {
         containerRiskIndicator.style.display = 'none';
+        lastStegoRisk = null;
         return;
     }
 
@@ -250,6 +253,7 @@ async function updateStegoRiskUI() {
                 payloadBytes,
                 lsbMode: mode
             });
+            lastStegoRisk = risk;
 
             containerRiskIndicator.style.display = 'block';
             riskBadge.innerText = `${risk.label} (%${risk.usagePercent})`;
@@ -595,7 +599,11 @@ btnEncrypt.addEventListener('click', async () => {
             // Tek Katman Modu (Format v3, 600.000 PBKDF2)
             if (!currentHideCanvasData) throw new Error("Lütfen taşıyıcı görsel seçin.");
 
-            showStatus("Format v3 şifreleniyor (600.000 PBKDF2, AES-256-GCM)...");
+            const isOverflow = distribution === 'adaptive' && lastStegoRisk && lastStegoRisk.isTextureOverflow;
+            const statusMsg = isOverflow 
+                ? `Format v3 şifreleniyor (600.000 PBKDF2, Doku Aşımı Uyarısı: %${lastStegoRisk.usagePercent})...`
+                : "Format v3 şifreleniyor (600.000 PBKDF2, AES-256-GCM)...";
+            showStatus(statusMsg);
             const result = await StegoWorkerClient.encryptV3({
                 pixelBuffer: currentHideCanvasData.imageData.data.buffer,
                 width: currentHideCanvasData.imageData.width,
@@ -643,7 +651,7 @@ btnEncrypt.addEventListener('click', async () => {
         }
 
         // Hassas verileri temizle
-        rawBufferToEncrypt.fill(0);
+        if (rawBufferToEncrypt instanceof Uint8Array) rawBufferToEncrypt.fill(0);
         inputHidePass.value = '';
         inputHideText.value = '';
 
@@ -651,6 +659,10 @@ btnEncrypt.addEventListener('click', async () => {
         showStatus("Hata: " + err.message, true);
         console.error("Encrypt error:", err);
     } finally {
+        if (rawBufferToEncrypt instanceof Uint8Array) {
+            rawBufferToEncrypt.fill(0);
+            rawBufferToEncrypt = null;
+        }
         setButtonsDisabled(false);
         btnEncrypt.disabled = false;
     }
@@ -700,7 +712,12 @@ async function processRevealFile(file) {
                     imageData: imgData,
                     rawCodec: true
                 };
-                hideStatus();
+                const carrierSafety = ImageEngine.checkCarrierSafety(file);
+                if (carrierSafety.isSocialMedia) {
+                    showStatus(`ℹ️ ${carrierSafety.warning} ${carrierSafety.recommendation || ''}`, false);
+                } else {
+                    hideStatus();
+                }
                 return;
             } catch (codecErr) {
                 console.warn("PngCodec ayrıştırma hatası, varsayılan Image yükleyicisine geçiliyor:", codecErr);
@@ -711,8 +728,9 @@ async function processRevealFile(file) {
         const maxDim = Math.max(img.width, img.height);
         currentRevealCanvasData = ImageEngine.processToCanvas(img, maxDim);
 
-        if (file.type === 'image/jpeg' || (file.name && /\.(jpe?g)$/i.test(file.name))) {
-            showStatus("⚠️ Uyarı: Seçilen görsel JPEG formatında. JPEG sıkıştırması görsel piksellerini bozduğu için LSB şifresi çözülemeyebilir. Lütfen şifreli orijinal PNG görselini seçtiğinizden emin olun.", true);
+        const carrierSafety = ImageEngine.checkCarrierSafety(file);
+        if (carrierSafety.warning) {
+            showStatus(`⚠️ ${carrierSafety.warning} ${carrierSafety.recommendation || ''}`, true);
         } else {
             hideStatus();
         }
@@ -840,7 +858,8 @@ btnDecrypt.addEventListener('click', async () => {
         decryptedBytes.fill(0);
 
     } catch (err) {
-        showStatus("Çözülemedi: Parola yanlış veya metin/görselde şifreli veri yok.", true);
+        const errorDetail = (err && err.message) ? err.message : "Parola yanlış veya metin/görselde şifreli veri yok.";
+        showStatus("Çözülemedi: " + errorDetail, true);
         console.error("Decrypt error:", err);
     } finally {
         setButtonsDisabled(false);

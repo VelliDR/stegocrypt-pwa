@@ -390,5 +390,16 @@ self.onmessage = async (e) => {
             id,
             error: err.message || String(err)
         });
+    } finally {
+        // Best-effort memory zeroization: İş parçacığı tamponlarını ve parola referanslarını sıfırla
+        if (data) {
+            if (data.rawBuffer instanceof ArrayBuffer) new Uint8Array(data.rawBuffer).fill(0);
+            if (data.rawDecoy instanceof ArrayBuffer) new Uint8Array(data.rawDecoy).fill(0);
+            data.pass = null;
+            data.passDecoy = null;
+            data.password = null;
+            data.rawBuffer = null;
+            data.rawDecoy = null;
+        }
     }
 };

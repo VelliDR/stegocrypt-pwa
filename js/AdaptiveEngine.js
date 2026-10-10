@@ -172,6 +172,7 @@ export const AdaptiveEngine = {
             label,
             badgeColor,
             usagePercent,
+            isTextureOverflow: usagePercent > 60,
             safeTextureBytes,
             totalPayloadBytes: payloadBytes,
             message
@@ -190,9 +191,10 @@ export const AdaptiveEngine = {
      * @param {Uint8Array} [salt] - 16 baytlık genel tuz
      * @param {'all'|'even'|'odd'} [partition='all']
      * @param {'matching'|'replacement'} [method='matching']
+     * @param {{ strictSafeTexture?: boolean }} [options={}]
      * @returns {ImageData}
      */
-    embedAdaptive(imageData, header48, cipherBody, lsbMode, scatterBits, salt, partition = 'all', method = 'matching') {
+    embedAdaptive(imageData, header48, cipherBody, lsbMode, scatterBits, salt, partition = 'all', method = 'matching', options = {}) {
         const data = imageData.data;
         const width = imageData.width;
         const height = imageData.height;
@@ -246,6 +248,9 @@ export const AdaptiveEngine = {
         const availableBodyPixels = sortedPixels.length - 256;
         if (neededBodyPixels > availableBodyPixels) {
             throw new Error(`Veri boyutu görselin dokulu alan kapasitesini aşıyor (${neededBodyPixels} piksel gerekli, ${availableBodyPixels} mevcut).`);
+        }
+        if (options && options.strictSafeTexture && neededBodyPixels > availableBodyPixels * 0.6) {
+            throw new Error(`Doku Kapasitesi Aşımı: Veri boyutu yüksek dokulu güvenli bölgeleri aşıyor (${neededBodyPixels} piksel gerekli, sınır: ${Math.floor(availableBodyPixels * 0.6)}).`);
         }
 
         const bodyPixels = sortedPixels.subarray(256, 256 + neededBodyPixels);

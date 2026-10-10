@@ -392,7 +392,7 @@ export const BinaryInspector = {
 
         let verdict = "Standart JPEG Yapısı";
         let verdictLevel = "clean";
-        let verdictDetails = "JPEG marker dizisi kurallara uygun tamamlandı.";
+        let verdictDetails = "JPEG marker dizisi standart. Not: JPEG kayıplı DCT kullandığından mekânsal LSB steganografisini koruyamaz; ancak EOI overlay veya EXIF enjeksiyonu içerebilir.";
 
         if (trailingData) {
             verdict = "⚠️ EOI Sonrası Gizli Veri Tespit Edildi (JPEG Overlay)";

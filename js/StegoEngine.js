@@ -498,8 +498,8 @@ export const StegoEngine = {
             try {
                 const payload = this.extractSequential(imageData);
                 return await CryptoEngine.decryptBuffer(payload, password);
-            } catch {
-                // Başarısızsa devam et
+            } catch (err) {
+                throw new Error(`Görselde şifreli StegoCrypt paketi (${magic}) tespit edildi; ancak parola hatalı veya kimlik doğrulama başarısız.`);
             }
         }
 
