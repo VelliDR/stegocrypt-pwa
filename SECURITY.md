@@ -1,39 +1,55 @@
 # Güvenlik Politikası ve Sorumlu Açık Bildirimi (SECURITY.md)
 
-StegoCrypt, açık kaynaklı ve istemci taraflı çalışan bir steganografi ve adli bilişim projesidir. Güvenlik, projenin temel önceliğidir.
+StegoCrypt, açık kaynaklı ve tamamen istemci taraflı (client-side) çalışan bir steganografi ve adli bilişim araştırma aracıdır.
+
+---
+
+> [!CAUTION]
+> **Sorumluluk Reddi:**  
+> Bu yazılım eğitim, araştırma ve test amacıyla geliştirilmiştir. **Bağımsız bir üçüncü taraf güvenlik veya kriptografi denetiminden (third-party security audit) geçmemiştir.** Hayati tehlike, muhbirlik veya yüksek operasyonel güvenlik (OPSEC) gerektiren hassas kullanım senaryoları için uygun değildir.
 
 ---
 
 ## 1. Desteklenen Sürümler
 
-| Sürüm | Durum |
-|---|---|
-| 3.x (Master / Geliştirme) | Aktif Destek |
-| 2.x (Önceki Sürüm) | Kritik Güvenlik Düzeltmeleri |
-| < 2.0 | Desteklenmiyor |
+Uygulama sürümü ile veri/tel formatı (wire format) sürümleri birbirinden bağımsızdır:
+
+### Uygulama Kod Tabanı
+| Sürüm | Durum | Açıklama |
+|---|---|---|
+| **v3.1.x (Master)** | Aktif Destek | Vite + TypeScript ana sürümü. Güvenlik ve özellik güncellemeleri yalnızca bu dala uygulanır. |
+| **v3.0.x (Legacy JS)** | Donduruldu | `v3.0.0-legacy-js` etiketiyle arşivlenmiştir. Aktif bakım yapılmamaktadır. |
+| **< v3.0** | Desteklenmiyor | Eski sürümler. |
+
+### Desteklenen Paket / Tel Formatları (Wire Formats)
+Uygulama, çözücü seviyesinde geriye dönük uyumluluk sunar:
+- **Format v3:** Argon2id / tekil KDF + HKDF-Expand, taze tuz/IV, LSB matching ve adaptif kafes doku.
+- **Format v2:** Sıfır-İmza (Zero-Signature), 100k PBKDF2 dağınık saçılım.
+- **Format v1:** Sıralı (Sequential, `STG1`/`STG2`) legacy paketler.
 
 ---
 
 ## 2. Güvenlik Açığı Bildirimi (Responsible Disclosure)
 
-Eğer StegoCrypt üzerinde bir güvenlik açığı, kriptografik zafiyet, yan kanal sızıntısı veya veri ifşası riski tespit ederseniz:
+Eğer StegoCrypt üzerinde bir kriptografik zafiyet, yan kanal sızıntısı, bellek açığı veya XSS/CSP baypas riski tespit ederseniz:
 
-1. **Lütfen bulgunuzu herkese açık bir GitHub Issue olarak paylaşmayın.**
-2. Güvenlik raporunuzu doğrudan GitHub repository üzerinden **Security Advisory (Gizli Açık Bildirimi)** oluşturarak iletin:
-   - Repository sekmesinde **Security > Advisories > Report a vulnerability** seçeneğini kullanın.
-   - Alternatif olarak doğrudan repository yöneticisi ile iletişime geçin.
+1. **Lütfen bulgunuzu herkese açık bir GitHub Issue olarak açmayın.**
+2. Tercih edilen yöntem: GitHub repository üzerinden **Security Advisory (Gizli Açık Bildirimi)** oluşturmaktır:
+   * Repository ana sayfasında **Security > Advisories > Report a vulnerability** adımlarını izleyin.
+3. Alternatif doğrudan iletişim: Proje yöneticisine e-posta gönderin:
+   * **E-posta:** `veliozkul45@gmail.com`
 
 ### Bildirimde Yer Alması Gerekenler:
-- Zafiyetin türü (Kriptografik, Steganaliz manipülasyonu, Bellek sızıntısı, XSS/CSP bypass vb.)
-- Yeniden üretme adımları (Proof of Concept - PoC)
-- Etkilenen bileşenler (örn. `CryptoEngine.js`, `PngCodec.js`, `StegoEngine.js`)
-- Olası etki ve önerilen çözüm/yama
+* Zafiyetin türü ve teorik risk derecesi
+* Yeniden üretme adımları veya kavram kanıtı (Proof of Concept - PoC)
+* Etkilenen modüller (örn. `CryptoEngine.ts`, `PngCodec.ts`, `StegoEngine.ts`)
+* Varsa önerilen iyileştirme veya yama
 
 ---
 
 ## 3. Yanıt ve Koordinasyon Süreci
 
-- **İlk Yanıt:** Bildiriminiz 48 saat içinde incelenir ve alındığı teyit edilir.
-- **Değerlendirme:** Zafiyetin teknik analizi ve risk derecelendirmesi en geç 5 iş günü içinde tamamlanır.
-- **Yama ve Dağıtım:** Onaylanan açıklar için yama hazırlanır, test edilir ve kamuya duyurulmadan önce yeni sürümle dağıtılır.
-- **Atıf (Credits):** Güvenlik araştırmacıları, talepleri doğrultusunda sürüm notlarında ve güvenlik bildiriminde açıkça teşekkür edilerek onurlandırılır.
+Bu proje bağımsız bir geliştirici tarafından sürdürülmektedir:
+* **İlk Yanıt:** Bildirimler en iyi çaba esasıyla (*best-effort*) birkaç iş günü içinde incelenir ve alındığı teyit edilir.
+* **Değerlendirme & Yama:** Doğrulanan açıklar için öncelikli olarak bir düzeltme hazırlanır, test edilir ve yeni bir sürümle yayımlanır.
+* **Atıf (Credits):** Güvenlik araştırmacıları, talepleri doğrultusunda sürüm notlarında ve güvenlik duyurularında açıkça onurlandırılır.
