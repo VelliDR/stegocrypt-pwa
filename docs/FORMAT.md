@@ -34,50 +34,48 @@ Sıfır İmza formatı, görsel içinde hiçbir açık metin başlık (`magic`) 
 | Bayt Ofseti | Boyut | Alan | Açıklama |
 |---|---|---|---|
 | `0..15` | 16 B | `Salt` | PBKDF2 anahtar türetme tuzu |
-| `16..27` | 12 B | `IV Meta` | Metadata bloğu için AES-GCM IV |
-| `28..51` | 24 B | `Encrypted Meta` | Şifreli meta (8 B açık veri + 16 B GCM Auth Tag) |
-| `52..63` | 12 B | `IV Body` | Şifreli gövde için AES-GCM IV |
+| `16..27` | 12 B | `IV Header` | Meta bloğu için AES-GCM IV |
+| `28..63` | 36 B | `Encrypted Meta` | Şifreli meta (20 B açık veri + 16 B GCM Auth Tag) |
 
-#### Şifreli Meta Bloğu Açık Metin Yapısı (8 Bayt):
-- `[0..1]`: `0x53, 0x47` (ASCII: `"SG"`)
-- `[2]`: `lsbMode` (`0x01` veya `0x02`)
-- `[3]`: Rezerve (`0x00`)
+#### Şifreli Meta Bloğu Açık Metin Yapısı (20 Bayt):
+- `[0]`: `lsbMode` (`0x01` veya `0x02`)
+- `[1..3]`: Rezerve (`0x00, 0x00, 0x00`)
 - `[4..7]`: `CipherBodyLen` (Uint32, Big-Endian)
+- `[8..19]`: `IV Body` (12 B — Şifreli gövde için AES-GCM IV; GCM etiketiyle kimlik doğrulamalı)
 
 ### 2.2 Dağıtım Motoru (ScatterEngine Permütasyonu)
 Piksel indeksleri afin permütasyon ile seçilir:
 $$P(i) = (c_0 + i \cdot \text{step}) \pmod{n_{\text{partition}}}$$
 
 Parametreler PBKDF2 üzerinden türetilir:
-- $\text{Tohum} = \text{PBKDF2}(\text{password}, \text{salt}=\text{"StegoCrypt\_PRNG\_Scatter\_V2"}, \text{iter}=1000)$
+- $\text{Tohum} = \text{PBKDF2}(\text{password}, \text{salt}=\text{"scatter-v2-" + partition}, \text{iter}=10000)$ (`256` bit)
 - $\gcd(\text{step}, n_{\text{partition}}) = 1$ koşulu sağlanarak permütasyonun birebir ve örten (bijective) olması garanti edilir.
 
 ---
 
 ## 3. Format v3: Tek KDF & HKDF Çoklu Katman (Faz 2 Spesifikasyonu)
 
-Format v3'te her katman için ayrı PBKDF2 çalıştırma maliyeti tamamen ortadan kaldırılmıştır. 16 baytlık genel tuz (public salt) görselin ilk 128 kanalına yerleştirilir; ardından tek bir 600.000 iterasyonlu PBKDF2-HMAC-SHA256 ana KDF çalıştırılarak HKDF (`HMAC-SHA-256`) ile alt-anahtarlar anında türetilir:
+Format v3'te her katman için ayrı KDF çalıştırma maliyeti tamamen ortadan kaldırılmıştır. 16 baytlık genel tuz (public salt) görselin ilk 128 kanalına yerleştirilir; ardından tek bir **PBKDF2-HMAC-SHA256 (600.000 iterasyon)** veya **Argon2id (64 MB Wasm)** ana KDF çalıştırılarak HKDF (`HMAC-SHA-256`) ile alt-anahtarlar anında türetilir:
 
 ```mermaid
 flowchart TD
-    A["Parola + Ortak Salt (16 B)"] --> B["Master Key = PBKDF2(parola, salt, 600.000)"]
+    A["Parola + Ortak Salt (16 B)"] --> B["Master Key = PBKDF2-600k veya Argon2id-64MB"]
     B --> C["HKDF-Expand(Master, 'v3/all')"]
     B --> D["HKDF-Expand(Master, 'v3/even')"]
     B --> E["HKDF-Expand(Master, 'v3/odd')"]
-    C --> C1["{scatterBits: 8B, metaKey: 32B, bodyKey: 32B}"]
-    D --> D1["{scatterBits: 8B, metaKey: 32B, bodyKey: 32B}"]
-    E --> E1["{scatterBits: 8B, metaKey: 32B, bodyKey: 32B}"]
+    C --> C1["{scatterBits: 32B, metaKey: 32B, bodyKey/chachaKey: 32B}"]
+    D --> D1["{scatterBits: 32B, metaKey: 32B, bodyKey/chachaKey: 32B}"]
+    E --> E1["{scatterBits: 32B, metaKey: 32B, bodyKey/chachaKey: 32B}"]
 ```
 
 ### 3.1 Paket Mimarisi
 
 1. **Ortak Salt Bloğu (16 Bayt = 128 Kanal):** Taşıyıcının ilk 128 RGB kanalına 1-LSB ile yazılır. Çift katmanlı inkâr modunda dahi tek bir ortak salt paylaşılır; bu sayede adli analizci çift salt anomalisi yakalayamaz.
-2. **Dağınık Başlık Bloğu (48 Bayt = 384 Kanal):** HKDF `scatterBits` tohumundan türetilen afin permütasyon indislerine 1-LSB ile dağıtılır:
+2. **Dağınık Başlık Bloğu (48 Bayt = 384 Kanal):** HKDF `scatterBits` (`info = label || 0x01`, 32 bayt) tohumundan türetilen afin permütasyon indislerine 1-LSB ile dağıtılır:
    - `0..11` (12 B): `IV Meta`
-   - `12..35` (24 B): `Encrypted Meta` (8 B açık veri: `[0x53, 0x47, lsbMode, 0x00, CipherBodyLen]` + 16 B AES-GCM Auth Tag)
-   - `36..47` (12 B): `IV Body`
-3. **Şifreli Gövde:** `lsbMode` (1-LSB veya 2-LSB) ile seçilen afin permütasyon indislerine gömülür.
-4. **Pure JS PNG Codec (`PngCodec`):** Üretilen piksel matrisi doğrudan RFC 1950/1951 saf JavaScript PNG kodlayıcısıyla dosya haline getirilir; HTML5 Canvas'ın renk profili ve alfa yuvarlama tahrifatları sıfırlanır.
+   - `12..47` (36 B): `Encrypted Meta` (`metaKey` ile AES-256-GCM şifreli 20 B açık veri + 16 B Auth Tag). Açık veri yapısı: `[0]: lsbMode`, `[1]: kdfId (0x01=PBKDF2, 0x02=Argon2id)`, `[2]: cipherId (0x01=AES-256-GCM, 0x02=ChaCha20-Poly1305)`, `[3]: rezerve`, `[4..7]: CipherBodyLen`, `[8..19]: IV/Nonce Body (12 B)`.
+3. **Şifreli Gövde:** `cipherId`'ye göre `bodyKey` (`info = label || 0x03`, AES-256-GCM) veya `chachaBodyKey` (`info = label || 0x04`, ChaCha20-Poly1305) ile şifrelenir ve `lsbMode` (1-LSB veya 2-LSB) ile seçilen afin permütasyon indislerine gömülür.
+4. **Saf TypeScript PNG Codec (`PngCodec.ts`):** Üretilen piksel matrisi doğrudan RFC 1950/1951 uyumlu saf TypeScript PNG kodlayıcısıyla dosya haline getirilir; HTML5 Canvas'ın renk profili ve alfa yuvarlama tahrifatları sıfırlanır.
 
 ---
 
@@ -137,7 +135,7 @@ Aşağıdaki test vektörü, bağımsız kütüphanelerin uyumluluğunu test etm
 Faz 5, StegoCrypt'i kapsamlı bir adli inceleme ve analiz laboratuvarına dönüştürür.
 
 ### 6.1 İkili Yapı (Binary Inspector) & Trailing Overlay Tespiti
-DOM ve Canvas ortamından bağımsız çalışan ikili analizci (`BinaryInspector.js`), dosya başlıklarını ve sonlandırıcılarını inceler:
+DOM ve Canvas ortamından bağımsız çalışan ikili analizci (`BinaryInspector.ts`), dosya başlıklarını ve sonlandırıcılarını inceler:
 
 1. **PNG Chunk Denetimi:**
    - 8 baytlık PNG imzası (`89 50 4E 47 0D 0A 1A 0A`) doğrulanır.
@@ -177,7 +175,7 @@ Metin tabanlı adli inceleme modülü:
 
 ## 7. Faz 6: zsteg Tarzı 56-Kombinasyon Derin Adli Bit Düzlemi Taraması
 
-Faz 6, CTF yarışmalarında ve adli bilişim incelemelerinde standart kabul edilen `zsteg` aracının web tabanlı, istemci-taraflı sıfır-kopyalama motorudur (`ZstegScanner.js`).
+Faz 6, CTF yarışmalarında ve adli bilişim incelemelerinde standart kabul edilen `zsteg` aracının web tabanlı, istemci-taraflı sıfır-kopyalama motorudur (`ZstegScanner.ts`).
 
 ### 7.1 Kombinasyon Uzayı (56 Kombinasyon)
 Görsel pikselleri aşağıdaki 4 boyutlu kartezyen uzayda ayrıştırılır:
@@ -195,12 +193,10 @@ Her kombinasyon için ilk $S = 2048$ bayt çıkarılarak aşağıdaki sezgisel m
    - 7z (`7z\xBC\xAF\x27\x1C`), RAR (`Rar!\x1A\x07`), GZIP (`\x1F\x8B`), BZIP2 (`BZh`), BMP (`BM`)
    - StegoCrypt formatları (`STG1`, `STG2`), ELF (`\x7FELF`), PE/DOS (`MZ`)
 2. **CTF Bayrak Sezgisi (Flag Heuristics):**
-   - Regex: `/(?:flag|ctf|cyber|stego|key|secret)\{[a-zA-Z0-9_\-\.\!@#$%^&*+=<>?|~]+\}/i`
+   - Regex: `/(flag\{[^}]+\}|ctf\{[^}]+\}|cyber\{[^}]+\}|stego\{[^}]+\}|key\{[^}]+\}|secret\{[^}]+\})/i`
    - Doğrudan açık metin eşleşmesi yakalanır ve önizlemede sunulur.
-3. **JSON ve Yapılandırılmış Veri:**
-   - Ön ek `{` veya `[` ile başlayıp `key:value` kalıbı taşıyan akışlar.
-4. **Basılabilir ASCII / Metin Analizi:**
-   - İlk 64 baytta basılabilir karakter oranı $\ge \%85$ olan ve ilk 12 baytında null byte bulunmayan akışlar.
+3. **Basılabilir ASCII / Metin Analizi:**
+   - İlk 512 baytta basılabilir karakter oranı $> \%85$ olan akışlar.
 
 ### 7.3 Doğrudan Yük Çıkarma (Payload Extraction)
 Seçilen kombinasyon için tüm görsel akışı `extractPayload(imageData, comboId, maxBytes)` fonksiyonu ile talep edildiğinde çıkarılır ve Blob olarak tarayıcı üzerinden anında indirilir.

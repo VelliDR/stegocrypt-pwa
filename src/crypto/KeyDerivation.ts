@@ -132,5 +132,27 @@ export const KeyDerivation = {
         );
 
         return { scatterBits, metaKey, bodyKey };
+    },
+
+    /**
+     * HKDF-SHA256 ile ChaCha20-Poly1305 gövde şifrelemesi için 32 baytlık ham anahtar türetir.
+     * Domain ayrımı için 0x04 etiketi kullanılır; kullanım sonrası .fill(0) ile sıfırlanmalıdır.
+     */
+    async deriveChaChaBodyKeyV3(
+        masterKey: CryptoKey,
+        infoLabel: `v3/${Partition}`
+    ): Promise<Uint8Array> {
+        const infoBytes = new TextEncoder().encode(infoLabel);
+        const bits = await crypto.subtle.deriveBits(
+            {
+                name: 'HKDF',
+                hash: 'SHA-256',
+                salt: new Uint8Array(0) as BufferSource,
+                info: new Uint8Array([...infoBytes, 0x04]) as BufferSource
+            },
+            masterKey,
+            256
+        );
+        return new Uint8Array(bits);
     }
 };

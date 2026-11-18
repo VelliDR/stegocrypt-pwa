@@ -1,33 +1,30 @@
-# Vendor Kütüphane Envanteri ve Bütünlük Doğrulaması (VENDOR.md)
+# Vendor Kütüphane Envanteri ve Güvenlik Politikası (VENDOR.md)
 
-Bu belgede `stegocrypt-pwa` projesinde kullanılan tüm üçüncü taraf istemci kütüphanelerinin sürümleri, menşe kaynakları, lisansları ve SHA-256 kriptografik özet değerleri listelenmiştir.
+Bu belgede `stegocrypt-pwa` v3.1.0 üretim derlemesinde kullanılan tüm üçüncü taraf istemci bağımlılıkları, sürümleri, lisansları ve menşe kaynakları listelenmiştir.
 
 ---
 
-## 1. Kütüphane Listesi
+## 1. Üretim Bağımlılıkları Envanteri
 
-| Kütüphane | Sürüm | Dosya Yolu | Lisans | Menşe (Upstream) |
+| Paket | Sürüm | Lisans | Kullanım Alanı | Menşe (Upstream) |
 |---|---|---|---|---|
-| **heic2any** | 0.0.4 | `js/vendor/heic2any.min.js` | MIT (bundled libheif: LGPL-3.0) | [alexcorvi/heic2any](https://github.com/alexcorvi/heic2any) |
-| **jsQR** | 1.4.0 | `js/vendor/jsQR.js` | Apache-2.0 | [cozmo/jsQR](https://github.com/cozmo/jsQR) |
-| **qrcode-generator** | 1.4.4 (ESM wrap) | `js/vendor/qrcode.mjs` | MIT | [kazuhikoarase/qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) |
+| **@noble/ciphers** | `^1.2.1` (1.3.0) | MIT | ChaCha20-Poly1305 (RFC 8439) AEAD şifreleme | [paulmillr/noble-ciphers](https://github.com/paulmillr/noble-ciphers) |
+| **hash-wasm** | `^4.12.0` | MIT | Argon2id WebAssembly (SIMD, bellek-zorlu KDF) | [Daninet/hash-wasm](https://github.com/Daninet/hash-wasm) |
+| **jsqr** | `^1.4.0` | Apache-2.0 | İstemci taraflı saf TypeScript/JS QR kod çözücü | [cozmo/jsQR](https://github.com/cozmo/jsQR) |
+| **qrcode-generator** | `^2.0.4` | MIT | UTF-8 & Zero-Width uyumlu QR kod üreteci | [kazuhikoarase/qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) |
+
+> **Not:** Eski `v3.0.0-legacy-js` sürümündeki `js/vendor/*` (`heic2any`, statik `jsQR.js`, `qrcode.mjs`) dosyaları TypeScript/Vite v3.1.0 geçişiyle birlikte npm paket yönetimine taşınmıştır (`package-lock.json` bütünlük doğrulamasıyla).
 
 ---
 
-## 2. SHA-256 Kriptografik Sağlama Değerleri (Checksums)
+## 2. Bütünlük Doğrulaması
 
-Dosyaların bütünlüğünü doğrulamak için terminalde `sha256sum js/vendor/*` komutunu çalıştırabilirsiniz:
-
-```text
-0963cfa50e9e1e7e6af929a40a81e3e898a673f1270eafa6917dd137e4968164  js/vendor/heic2any.min.js
-bc40c8a15196236b2314db0856f72ca0b49980cd5413b8c852a7349f5fee0859  js/vendor/jsQR.js
-ea91d7118a5395289170da848b7c6758b996163bfbccf312591ab65a4911b7c0  js/vendor/qrcode.mjs
-```
+Tüm bağımlılıkların `package-lock.json` içerisindeki kriptografik `integrity` (SHA-512) özetleri `npm ci` sırasında otomatik doğrulanır.
 
 ---
 
 ## 3. Güvenlik ve Bağımsızlık İlkesi
 
-- Projede hiçbir CDN veya dış sunucu bağlantısı (`connect-src`, harici `script-src`) bulunmamaktadır.
-- Tüm üçüncü taraf bağımlılıklar yerel dosya sistemindedir, Service Worker ile çevrimdışı önbelleklenir ve CSP `default-src 'self'` politikasıyla sınırlandırılmıştır.
+- Projede hiçbir CDN veya dış sunucu bağlantısı (`connect-src 'self'`, harici `script-src`) bulunmamaktadır.
+- Tüm üçüncü taraf bağımlılıklar Vite tarafından yerel `dist/assets/` içine paketlenir, Service Worker ile çevrimdışı önbelleklenir ve `index.html` üzerinde Content Security Policy (`default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'`) politikasıyla sınırlandırılmıştır.
 - Paketlerde herhangi bir telemetri, analitik izleme veya harici ağ çağrısı bulunmamaktadır.

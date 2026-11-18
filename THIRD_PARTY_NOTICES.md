@@ -1,28 +1,30 @@
 # Üçüncü Taraf Lisans ve Telif Bildirimleri (Third-Party Notices)
 
-StegoCrypt projesi aşağıdaki açık kaynaklı üçüncü taraf kütüphaneleri ve bileşenleri içermektedir:
+StegoCrypt v3.1.0 projesi aşağıdaki açık kaynaklı üçüncü taraf kütüphaneleri kullanmaktadır:
 
 ---
 
-## 1. heic2any & libheif
+## 1. @noble/ciphers
 
-- **Dosya:** `js/vendor/heic2any.min.js`
-- **Telif Hakkı:** (c) 2019-2021 Alex Corvi
+- **Paket:** `@noble/ciphers`
+- **Telif Hakkı:** (c) 2023 Paul Miller (https://paulmillr.com)
 - **Lisans:** MIT Lisansı
-- **Web Sitesi:** https://github.com/alexcorvi/heic2any
-
-### Özel Bildirim: libheif (LGPL-3.0)
-`heic2any` paketi, arka plan Web Worker içinde HEIC/HEIF kod çözümü gerçekleştirmek üzere WebAssembly (Wasm) formatında derlenmiş **libheif** kütüphanesini içermektedir.
-- **libheif Telif Hakkı:** (c) 2017-2023 struktur AG / Dirk Farin
-- **libheif Lisansı:** GNU Lesser General Public License v3.0 (LGPL-3.0)
-- **Kaynak Kod Erişimi:** libheif kaynak kodlarına [https://github.com/strukturag/libheif](https://github.com/strukturag/libheif) adresinden erişilebilir.
-- LGPL-3.0 şartları gereği, kullanıcılar libheif bileşenini yeniden derleme veya bağımsız olarak değiştirme hakkına sahiptir.
+- **Web Sitesi:** https://github.com/paulmillr/noble-ciphers
 
 ---
 
-## 2. jsQR
+## 2. hash-wasm
 
-- **Dosya:** `js/vendor/jsQR.js`
+- **Paket:** `hash-wasm`
+- **Telif Hakkı:** (c) 2020 Dani Biro
+- **Lisans:** MIT Lisansı
+- **Web Sitesi:** https://github.com/Daninet/hash-wasm
+
+---
+
+## 3. jsQR
+
+- **Paket:** `jsqr`
 - **Telif Hakkı:** (c) 2017 Cosmotron Inc.
 - **Lisans:** Apache License 2.0
 - **Web Sitesi:** https://github.com/cozmo/jsQR
@@ -40,9 +42,9 @@ limitations under the License.
 
 ---
 
-## 3. qrcode-generator
+## 4. qrcode-generator
 
-- **Dosya:** `js/vendor/qrcode.mjs`
+- **Paket:** `qrcode-generator`
 - **Telif Hakkı:** (c) 2009 Kazuhiko Arase
 - **Lisans:** MIT Lisansı
 - **Web Sitesi:** https://github.com/kazuhikoarase/qrcode-generator

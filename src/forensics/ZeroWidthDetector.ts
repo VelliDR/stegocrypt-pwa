@@ -128,7 +128,7 @@ export const ZeroWidthDetector = {
                 typesSet.add(`BiDi Yön İmi (U+${code.toString(16).toUpperCase()})`);
             }
             // 6. Unicode Düzlem 14 (Tag Plane / ASCII Smuggling)
-            else if (code >= 0xE0020 && code <= 0xE007E) {
+            else if (code >= 0xE0000 && code <= 0xE007F) {
                 count++;
                 categories.tagPlane14++;
                 typesSet.add('Unicode Düzlem 14 Tag');

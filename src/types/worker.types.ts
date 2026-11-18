@@ -14,6 +14,7 @@ export type WorkerAction =
     | 'CALCULATE_RISK'
     | 'INSPECT_BINARY'
     | 'COMPARE_IMAGES'
+    | 'RENDER_AMPLIFIED_DIFF'
     | 'ANALYZE_TEXT'
     | 'SCAN_ZSTEG'
     | 'EXTRACT_ZSTEG_PAYLOAD';

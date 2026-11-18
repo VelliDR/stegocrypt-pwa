@@ -13,7 +13,7 @@ Analizler, 1920×1080 piksel doğal fotoğrafik taşıyıcılar ve sentetik grad
    - 128 adet $(2k, 2k+1)$ renk çifti frekansının beklenen teorik ortalamaya yakınsamasını inceler.
    - P-değeri ve serbestlik derecesi (dof) üzerinden tespit olasılığı hesaplar.
 2. **Fridrich RS (Regular/Singular) Steganaliz Testi (Fridrich et al., 2001):**
-   - $2 \times 2$ blok gruplaması ve $M = [0, 1, 1, 0]$, $-M = [0, -1, -1, 0]$ maskeleri kullanır.
+   - Satır içi 4-piksellik yatay gruplama ve $M = [0, 1, 1, 0]$, $-M = [0, -1, -1, 0]$ maskeleri kullanır.
    - Ters çevirme fonksiyonları ($F_1, F_{-1}$) ile Düzenli ($R_M, R_{-M}$) ve Tekil ($S_M, S_{-M}$) grup yüzdelerini çıkarır.
    - $a x^2 + b x + c = 0$ kuadratik denklemini çözerek gömülen yük oranını ($\hat{p} = \frac{x}{x - 0.5}$) tahmin eder.
 
@@ -78,7 +78,7 @@ Bu yüksek seviyeli saldırılara karşı en etkili savunma, düz ve homojen bö
 
 ## 5. İçerik Duyarlı (Content-Adaptive) Dağıtım ve Stego Risk İndeksi
 
-Faz 4 ile entegre edilen Dama Tahtası (Checkerboard) Kafes Doku Dağıtım Motoru (`AdaptiveEngine.js`), taşıyıcının düz ve homojen alanlarını (gökyüzü, tekdüze duvarlar) analiz dışı bırakarak yükü yalnızca yüksek frekanslı kenar ve dokulara gömer.
+Faz 4 ile entegre edilen Dama Tahtası (Checkerboard) Kafes Doku Dağıtım Motoru (`AdaptiveEngine.ts`), taşıyıcının düz ve homojen alanlarını (gökyüzü, tekdüze duvarlar) analiz dışı bırakarak yükü yalnızca yüksek frekanslı kenar ve dokulara gömer.
 
 ### 5.1 Homojen PRNG vs. İçerik Duyarlı Kafes Dağıtımı
 

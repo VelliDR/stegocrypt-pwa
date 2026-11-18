@@ -15,6 +15,7 @@
     --md-error: #ffb4ab;
     --md-error-container: #93000a;
     --md-on-error: #690005;
+    --md-on-error-container: #ffdad6;
     --md-warning: #ffb74d;
     --md-warning-container: #422800;
 }
@@ -122,7 +123,8 @@ header p {
 
 input[type="text"],
 input[type="password"],
-textarea {
+textarea,
+select.m3-select {
     width: 100%;
     background-color: var(--md-surface-dim);
     border: 1.5px solid var(--md-outline);
@@ -134,7 +136,65 @@ textarea {
     transition: border-color 0.2s, background-color 0.2s;
 }
 
-input:focus, textarea:focus {
+select.m3-select {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-wrapper input {
+    padding-right: 48px;
+}
+
+.btn-toggle-pass {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: var(--md-on-surface-variant);
+    cursor: pointer;
+    font-size: 1.05rem;
+    padding: 6px 8px;
+    border-radius: 8px;
+    line-height: 1;
+}
+
+.btn-toggle-pass:hover {
+    color: var(--md-primary);
+    background-color: var(--md-surface-container-high);
+}
+
+.pass-strength-row {
+    display: none;
+    margin-top: 8px;
+}
+
+.pass-strength-bar {
+    height: 4px;
+    border-radius: 100px;
+    background-color: var(--md-surface-container-highest);
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.pass-strength-fill {
+    height: 100%;
+    width: 0%;
+    transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.pass-strength-text {
+    font-size: 0.72rem;
+    color: var(--md-on-surface-variant);
+}
+
+input:focus, textarea:focus, select.m3-select:focus {
     border-color: var(--md-primary);
     background-color: var(--md-surface-container-high);
 }
@@ -153,6 +213,17 @@ textarea {
     padding: 12px 14px;
     border-radius: 12px;
     border: 1px solid var(--md-outline-variant);
+}
+
+.radio-group-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+}
+
+.radio-option.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .radio-option {
@@ -235,6 +306,18 @@ textarea {
 
 .m3-btn:active {
     transform: scale(0.98);
+}
+
+.m3-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.m3-alert-error {
+    background: var(--md-error-container);
+    color: var(--md-on-error-container);
+    border: 1px solid var(--md-error);
 }
 
 .m3-btn-tonal {

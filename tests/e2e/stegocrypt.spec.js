@@ -605,22 +605,225 @@ test.describe('StegoCrypt PWA - Core E2E Tests', () => {
         }
     });
 
-    test('15. Phase 6 - PWA Service Worker Cache & Update Banner Readiness', async ({ page }) => {
+    test('15. Phase 6 - PWA Service Worker Cache & Update Banner Readiness', async ({ page, context }) => {
         await page.goto('/');
 
         // Verify service worker registration is active
         const swRegistered = await page.evaluate(async () => {
             if (!('serviceWorker' in navigator)) return false;
-            const reg = await navigator.serviceWorker.getRegistration();
+            const reg = await navigator.serviceWorker.ready;
             return !!reg;
         });
         expect(swRegistered).toBe(true);
+        await page.waitForTimeout(1000);
+
+        const cacheKeys = await page.evaluate(async () => {
+            const keys = await caches.keys();
+            const result = {};
+            for (const k of keys) {
+                const c = await caches.open(k);
+                const reqs = await c.keys();
+                result[k] = reqs.map(r => r.url);
+            }
+            return result;
+        });
+        console.log('CACHE KEYS:', cacheKeys);
 
         // Verify PWA update elements exist in DOM
         const bannerPwaUpdate = page.locator('#banner-pwa-update');
         await expect(bannerPwaUpdate).toBeAttached();
         const btnPwaReload = page.locator('#btn-pwa-reload');
         await expect(btnPwaReload).toBeAttached();
+
+        // Now test offline reload!
+        await context.setOffline(true);
+        await page.reload();
+        await page.waitForTimeout(500);
+
+        // Verify full styling is loaded offline (not 90s fallback / transparent)
+        const bodyBg = await page.evaluate(() => window.getComputedStyle(document.body).backgroundColor);
+        expect(bodyBg).toBe('rgb(19, 22, 20)');
+
+        const cardBg = await page.evaluate(() => {
+            const card = document.querySelector('.m3-card');
+            return card ? window.getComputedStyle(card).backgroundColor : '';
+        });
+        expect(cardBg).toBe('rgb(27, 31, 28)');
+
+        // Verify full interactive navigation works offline
+        await page.click('#btn-tab-reveal');
+        await expect(page.locator('#tab-reveal')).toHaveClass(/active/);
+
+        await page.click('#btn-tab-inspect');
+        await expect(page.locator('#tab-inspect')).toHaveClass(/active/);
+
+        await page.click('#btn-tab-hide');
+        await expect(page.locator('#tab-hide')).toHaveClass(/active/);
+    });
+
+    test('16. Security - zsteg XSS Neutralization with Malicious HTML LSB Payload', async ({ page }) => {
+        await page.goto('/');
+
+        const width = 64;
+        const height = 64;
+        const pixelBuffer = new Uint8ClampedArray(width * height * 4).fill(128);
+        const xssPayload = 'flag{<img src=x onerror="window.__xssTriggered=true">}\n';
+        const bytes = new TextEncoder().encode(xssPayload);
+        for (let i = 0; i < bytes.length; i++) {
+            const b = bytes[i];
+            for (let bit = 0; bit < 8; bit++) {
+                const bitVal = (b >> bit) & 1;
+                const pxIdx = i * 8 + bit;
+                pixelBuffer[pxIdx * 4 + 2] = (pixelBuffer[pxIdx * 4 + 2] & 0xFE) | bitVal;
+            }
+        }
+
+        const pngBytes = await PngCodec.encode({ width, height, data: pixelBuffer });
+        const testPngPath = path.join(fixturesDir, 'temp_xss_zsteg.png');
+        fs.writeFileSync(testPngPath, Buffer.from(pngBytes));
+
+        try {
+            await page.locator('#btn-tab-inspect').click();
+            await page.locator('#btn-subtab-zsteg').click();
+            await page.locator('#file-zsteg').setInputFiles(testPngPath);
+            await page.locator('#btn-start-zsteg').click();
+
+            const flagRow = page.locator('#tbody-zsteg-results tr').filter({ hasText: 'b,1b,lsb,xy' });
+            await expect(flagRow).toBeVisible({ timeout: 15000 });
+            await expect(flagRow).toContainText('<img src=x');
+
+            const triggered = await page.evaluate(() => Boolean(window.__xssTriggered));
+            expect(triggered).toBe(false);
+        } finally {
+            if (fs.existsSync(testPngPath)) fs.unlinkSync(testPngPath);
+        }
+    });
+
+    test('17. Sequential (Format v1) & ChaCha20-Poly1305 Encryption Roundtrips', async ({ page }) => {
+        await page.goto('/');
+
+        const carrierPath = path.join(fixturesDir, 'opaque_carrier.png');
+
+        // A) Format v1 Sequential mode should disable incompatible v3 options and roundtrip cleanly
+        await page.locator('#file-hide').setInputFiles(carrierPath);
+        await page.locator('#scatter-mode-seq').check();
+        await expect(page.locator('#kdf-argon2id')).toBeDisabled();
+        await expect(page.locator('#cipher-chacha20')).toBeDisabled();
+        await expect(page.locator('#check-deniable')).toBeDisabled();
+
+        const seqMsg = 'Sıralı Format v1 E2E Doğrulama';
+        const seqPass = 'SeqPass!2026';
+        await page.locator('#text-hide').fill(seqMsg);
+        await page.locator('#pass-hide').fill(seqPass);
+        await page.locator('#btn-encrypt').click();
+        await expect(page.locator('#btn-share')).toBeVisible();
+
+        const seqDlPromise = page.waitForEvent('download');
+        await page.locator('#btn-share').click();
+        const seqDlPath = await (await seqDlPromise).path();
+
+        await page.locator('#btn-tab-reveal').click();
+        await page.locator('#file-reveal').setInputFiles(seqDlPath);
+        await page.locator('#pass-reveal').fill(seqPass);
+        await page.locator('#btn-decrypt').click();
+        await expect(page.locator('#text-reveal')).toHaveValue(seqMsg);
+
+        // B) ChaCha20-Poly1305 Adaptive mode roundtrip
+        await page.locator('#btn-tab-hide').click();
+        await page.locator('#scatter-mode-adaptive').check();
+        await page.locator('#cipher-chacha20').check();
+        const chachaMsg = 'ChaCha20-Poly1305 E2E Testi 🚀';
+        const chachaPass = 'ChaChaPass#2026';
+        await page.locator('#text-hide').fill(chachaMsg);
+        await page.locator('#pass-hide').fill(chachaPass);
+        await page.locator('#btn-encrypt').click();
+        await expect(page.locator('#btn-share')).toBeVisible();
+
+        const ccDlPromise = page.waitForEvent('download');
+        await page.locator('#btn-share').click();
+        const ccDlPath = await (await ccDlPromise).path();
+
+        await page.locator('#btn-tab-reveal').click();
+        await page.locator('#file-reveal').setInputFiles(ccDlPath);
+        await page.locator('#pass-reveal').fill(chachaPass);
+        await page.locator('#btn-decrypt').click();
+        await expect(page.locator('#text-reveal')).toHaveValue(chachaMsg);
+    });
+
+    test('18. File Hiding with Multi-Byte UTF-8 (Turkish) Filename Byte-Exact Extraction', async ({ page }) => {
+        await page.goto('/');
+
+        const carrierPath = path.join(fixturesDir, 'opaque_carrier.png');
+        const utf8FilePath = path.join(fixturesDir, 'gizli_şifre_çözümü_öğe.txt');
+        const expectedBody = 'UTF-8 dosya adı bayt kayması düzeltme testi! 12345';
+        fs.writeFileSync(utf8FilePath, expectedBody, 'utf8');
+
+        try {
+            await page.locator('#type-file').click();
+            await page.locator('#file-hide').setInputFiles(carrierPath);
+            await page.locator('#file-secret-input').setInputFiles(utf8FilePath);
+            await page.locator('#pass-hide').fill('Utf8FilenamePass!2026');
+            await page.locator('#btn-encrypt').click();
+            await expect(page.locator('#btn-share')).toBeVisible();
+
+            const dlPromise = page.waitForEvent('download');
+            await page.locator('#btn-share').click();
+            const stegoPath = await (await dlPromise).path();
+
+            await page.locator('#btn-tab-reveal').click();
+            await page.locator('#file-reveal').setInputFiles(stegoPath);
+            await page.locator('#pass-reveal').fill('Utf8FilenamePass!2026');
+            await page.locator('#btn-decrypt').click();
+
+            const btnDownloadFile = page.locator('#btn-download-file');
+            await expect(btnDownloadFile).toBeVisible();
+            await expect(btnDownloadFile).toContainText('gizli_şifre_çözümü_öğe.txt');
+
+            const fileDlPromise = page.waitForEvent('download');
+            await btnDownloadFile.click();
+            const extractedPath = await (await fileDlPromise).path();
+            const extractedContent = fs.readFileSync(extractedPath, 'utf8');
+            expect(extractedContent).toBe(expectedBody);
+        } finally {
+            if (fs.existsSync(utf8FilePath)) fs.unlinkSync(utf8FilePath);
+        }
+    });
+
+    test('19. Forensics - Alpha Channel Preservation in zsteg Scan', async ({ page }) => {
+        await page.goto('/');
+
+        const width = 64;
+        const height = 64;
+        const pixelBuffer = new Uint8ClampedArray(width * height * 4).fill(128);
+        const secretFlag = 'flag{alpha_preserved_2026}\n';
+        const flagBytes = new TextEncoder().encode(secretFlag);
+        // Embed into RGBA 1b lsb xy (4 channels per pixel including Alpha!)
+        let chIdx = 0;
+        for (let i = 0; i < flagBytes.length; i++) {
+            const b = flagBytes[i];
+            for (let bit = 0; bit < 8; bit++) {
+                const bitVal = (b >> bit) & 1;
+                pixelBuffer[chIdx] = (pixelBuffer[chIdx] & 0xFE) | bitVal;
+                chIdx++;
+            }
+        }
+
+        const pngBytes = await PngCodec.encode({ width, height, data: pixelBuffer });
+        const alphaTestPng = path.join(fixturesDir, 'temp_zsteg_alpha.png');
+        fs.writeFileSync(alphaTestPng, Buffer.from(pngBytes));
+
+        try {
+            await page.locator('#btn-tab-inspect').click();
+            await page.locator('#btn-subtab-zsteg').click();
+            await page.locator('#file-zsteg').setInputFiles(alphaTestPng);
+            await page.locator('#btn-start-zsteg').click();
+
+            const rgbaRow = page.locator('#tbody-zsteg-results tr').filter({ hasText: 'rgba,1b,lsb,xy' });
+            await expect(rgbaRow).toBeVisible({ timeout: 15000 });
+            await expect(rgbaRow).toContainText('flag{alpha_preserved_2026}');
+        } finally {
+            if (fs.existsSync(alphaTestPng)) fs.unlinkSync(alphaTestPng);
+        }
     });
 });
 

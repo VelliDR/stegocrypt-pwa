@@ -6,7 +6,7 @@
  * - Format v1 (Sıralı Mod STG1/STG2/STEG).
  */
 
-import { ScatterEngine } from './ScatterEngine.ts';
+import { ScatterEngine, modAffine } from './ScatterEngine.ts';
 import { KeyDerivation } from '../crypto/KeyDerivation.ts';
 import { CryptoEngine } from '../crypto/CryptoEngine.ts';
 import { AdaptiveEngine } from './AdaptiveEngine.ts';
@@ -219,7 +219,7 @@ export const StegoEngine = {
         }
 
         function getRawIndex(stepIdx: number): number {
-            const pIdx = (c0 + stepIdx * step) % nPartition;
+            const pIdx = modAffine(c0, stepIdx, step, nPartition);
             let payloadChannel = pIdx;
             if (partition === 'even') payloadChannel = pIdx * 2;
             else if (partition === 'odd') payloadChannel = pIdx * 2 + 1;
@@ -277,7 +277,7 @@ export const StegoEngine = {
         const { c0, step, nPartition } = ScatterEngine.deriveParamsFromBits(scatterBits, payloadChannels, partition);
 
         function getRawIndex(stepIdx: number): number {
-            const pIdx = (c0 + stepIdx * step) % nPartition;
+            const pIdx = modAffine(c0, stepIdx, step, nPartition);
             let payloadChannel = pIdx;
             if (partition === 'even') payloadChannel = pIdx * 2;
             else if (partition === 'odd') payloadChannel = pIdx * 2 + 1;
@@ -299,7 +299,7 @@ export const StegoEngine = {
             header48[b] = byteVal;
         }
 
-        const { lsbMode, cipherLen, ivBody } = await CryptoEngine.decryptMetaV3(header48, metaKey as CryptoKey);
+        const { lsbMode, cipherLen, ivBody, cipherId } = await CryptoEngine.decryptMetaV3(header48, metaKey as CryptoKey);
 
         const channelsPerBodyByte = lsbMode === 2 ? 4 : 8;
         const neededBodyChannels = cipherLen * channelsPerBodyByte;
@@ -319,7 +319,15 @@ export const StegoEngine = {
             cipherBody[b] = byteVal;
         }
 
-        return await CryptoEngine.decryptBodyV3(cipherBody, bodyKey as CryptoKey, ivBody);
+        if (cipherId === 0x02) {
+            const chachaKey = await KeyDerivation.deriveChaChaBodyKeyV3(masterKey, label);
+            try {
+                return await CryptoEngine.decryptBodyV3(cipherBody, chachaKey, ivBody, 0x02);
+            } finally {
+                chachaKey.fill(0);
+            }
+        }
+        return await CryptoEngine.decryptBodyV3(cipherBody, bodyKey as CryptoKey, ivBody, cipherId);
     },
 
     // =========================================================================
@@ -416,7 +424,25 @@ export const StegoEngine = {
         const data = imageData.data;
         const totalUsableChannels = Math.floor((data.length / 4) * 3);
 
+        // 0. HIZLI YOL: Format v1 Sıralı Mod (STG1/STG2/STEG) sihirli başlık ön kontrolü
+        let detectedV1Magic: string | null = null;
+        if (totalUsableChannels >= 36 * 8) {
+            const reader = new BitReader(data);
+            const first4 = reader.readBytes(4, 1);
+            const magic = new TextDecoder().decode(first4);
+            if (magic === "STG1" || magic === "STG2" || magic === "STEG") {
+                detectedV1Magic = magic;
+                try {
+                    const payload = this.extractSequential(imageData);
+                    return await CryptoEngine.decryptBuffer(payload, password);
+                } catch {
+                    // Yanlış parola veya istisnai çakışma durumunda diğer formatları da dene
+                }
+            }
+        }
+
         // 1. ÖNCELİK: Format v3 (PBKDF2 600k veya Argon2id SIMD Wasm + HKDF)
+        let argon2RuntimeError: string | null = null;
         if (totalUsableChannels > 128 + 48 * 8) {
             const salt = this.readSaltV3(data);
             const v3Partitions: Partition[] = ['all', 'even', 'odd'];
@@ -463,8 +489,8 @@ export const StegoEngine = {
                         // Katman uyuşmazsa devam
                     }
                 }
-            } catch {
-                // Argon2id de başarısız olursa v2/v1 formatlarına geç
+            } catch (err: any) {
+                argon2RuntimeError = err?.message || String(err);
             }
         }
 
@@ -478,18 +504,12 @@ export const StegoEngine = {
             }
         }
 
-        // 3. ÖNCELİK: Format v1 Sıralı Mod (STG1/STG2/STEG)
-        const reader = new BitReader(data);
-        const first4 = reader.readBytes(4, 1);
-        const magic = new TextDecoder().decode(first4);
+        if (detectedV1Magic) {
+            throw new Error(`Görselde şifreli StegoCrypt paketi (${detectedV1Magic}) tespit edildi; ancak parola hatalı veya kimlik doğrulama başarısız.`);
+        }
 
-        if (magic === "STG1" || magic === "STG2" || magic === "STEG") {
-            try {
-                const payload = this.extractSequential(imageData);
-                return await CryptoEngine.decryptBuffer(payload, password);
-            } catch {
-                throw new Error(`Görselde şifreli StegoCrypt paketi (${magic}) tespit edildi; ancak parola hatalı veya kimlik doğrulama başarısız.`);
-            }
+        if (argon2RuntimeError) {
+            throw new Error(`Parola yanlış veya Argon2id Wasm motoru çalıştırılamadı (${argon2RuntimeError}).`);
         }
 
         throw new Error("Parola yanlış veya bu görselde şifreli veri bulunamadı.");

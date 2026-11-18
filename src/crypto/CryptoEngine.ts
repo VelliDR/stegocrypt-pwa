@@ -5,7 +5,7 @@
  */
 
 import { chacha20poly1305 } from '@noble/ciphers/chacha';
-import type { LsbMode, EncryptedPackageV3, ZeroSigHeaderResult } from '../types/index.ts';
+import type { LsbMode, CipherAlgorithm, EncryptedPackageV3, ZeroSigHeaderResult } from '../types/index.ts';
 
 export const CryptoEngine = {
     /**
@@ -47,35 +47,48 @@ export const CryptoEngine = {
      * Format v3 için 48 baytlık başlık ve gövdeyi şifreler.
      * @param dataBytes Şifrelenecek ham veri
      * @param metaKey Başlık için türetilmiş AES-GCM CryptoKey
-     * @param bodyKey Gövde için türetilmiş AES-GCM CryptoKey
+     * @param bodyKey Gövde için türetilmiş AES-GCM CryptoKey veya ChaCha20 32-bayt ham anahtar
      * @param lsbMode 1 veya 2 LSB
      * @param kdfId 0x01 (PBKDF2) veya 0x02 (Argon2id)
+     * @param cipherAlgorithm 'aes-256-gcm' veya 'chacha20-poly1305'
      */
     async encryptV3(
         dataBytes: Uint8Array,
         metaKey: CryptoKey,
-        bodyKey: CryptoKey,
+        bodyKey: CryptoKey | Uint8Array,
         lsbMode: LsbMode = 1,
-        kdfId: number = 0x01
+        kdfId: number = 0x01,
+        cipherAlgorithm: CipherAlgorithm = 'aes-256-gcm'
     ): Promise<EncryptedPackageV3> {
-        // 1. Gövde için rastgele 12 bayt IV üret ve şifrele
+        // 1. Gövde için rastgele 12 bayt IV/Nonce üret ve şifrele
         const ivBody = crypto.getRandomValues(new Uint8Array(12));
-        const bodyBuf = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv: ivBody as BufferSource },
-            bodyKey,
-            dataBytes as BufferSource
-        );
-        const cipherBody = new Uint8Array(bodyBuf);
+        let cipherBody: Uint8Array;
+        let cipherId = 0x01;
+
+        if (cipherAlgorithm === 'chacha20-poly1305') {
+            if (!(bodyKey instanceof Uint8Array) || bodyKey.length !== 32) {
+                throw new Error("ChaCha20-Poly1305 için 32 baytlık ham anahtar gereklidir.");
+            }
+            cipherId = 0x02;
+            cipherBody = this.encryptChaCha(dataBytes, bodyKey, ivBody);
+        } else {
+            const bodyBuf = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: ivBody as BufferSource },
+                bodyKey as CryptoKey,
+                dataBytes as BufferSource
+            );
+            cipherBody = new Uint8Array(bodyBuf);
+        }
 
         // 2. 20 baytlık açık meta bloğu oluştur
         const rawMeta = new Uint8Array(20);
         const metaView = new DataView(rawMeta.buffer);
         rawMeta[0] = lsbMode;             // 1 bayt: LSB Modu (1 veya 2)
         rawMeta[1] = kdfId;               // 1 bayt: KDF Türü (0x01: PBKDF2 600k, 0x02: Argon2id)
-        rawMeta[2] = 0x01;                // 1 bayt: Şifre Türü (0x01: AES-GCM, 0x02: ChaCha20-Poly1305)
+        rawMeta[2] = cipherId;            // 1 bayt: Şifre Türü (0x01: AES-GCM, 0x02: ChaCha20-Poly1305)
         rawMeta[3] = 0x00;                // 1 bayt: Rezerve
         metaView.setUint32(4, cipherBody.length, false); // 4 bayt: Şifreli gövde uzunluğu (Big-Endian)
-        rawMeta.set(ivBody, 8);           // 12 bayt: Gövde IV
+        rawMeta.set(ivBody, 8);           // 12 bayt: Gövde IV / Nonce
 
         // 3. 20 baytlık metayı 12 baytlık rastgele IV ile şifrele (Çıktı: 20 bayt + 16 bayt auth tag = 36 bayt)
         const ivMeta = crypto.getRandomValues(new Uint8Array(12));
@@ -101,7 +114,7 @@ export const CryptoEngine = {
     async decryptMetaV3(
         header48: Uint8Array,
         metaKey: CryptoKey
-    ): Promise<{ lsbMode: LsbMode; cipherLen: number; ivBody: Uint8Array; kdfId: number }> {
+    ): Promise<{ lsbMode: LsbMode; cipherLen: number; ivBody: Uint8Array; kdfId: number; cipherId: number }> {
         if (header48.length < 48) {
             throw new Error("Geçersiz Format v3 başlık uzunluğu.");
         }
@@ -117,26 +130,40 @@ export const CryptoEngine = {
         const rawMeta = new Uint8Array(decryptedMetaBuf);
         const metaView = new DataView(rawMeta.buffer);
 
-        const lsbMode = (rawMeta[0] === 2 ? 2 : 1) as LsbMode;
-        const kdfId = rawMeta[1];
+        const rawLsbMode = rawMeta[0];
+        if (rawLsbMode !== 1 && rawLsbMode !== 2) {
+            rawMeta.fill(0);
+            throw new Error("Geçersiz Format v3 LSB modu.");
+        }
+        const lsbMode = rawLsbMode as LsbMode;
+        const kdfId = rawMeta[1]!;
+        const cipherId = rawMeta[2] || 0x01;
         const cipherLen = metaView.getUint32(4, false);
         const ivBody = new Uint8Array(rawMeta.subarray(8, 20));
 
         rawMeta.fill(0);
-        return { lsbMode, cipherLen, ivBody, kdfId };
+        return { lsbMode, cipherLen, ivBody, kdfId, cipherId };
     },
 
     /**
-     * Format v3 gövdesini çözer.
+     * Format v3 gövdesini çözer (AES-256-GCM veya ChaCha20-Poly1305).
      */
     async decryptBodyV3(
         cipherBody: Uint8Array,
-        bodyKey: CryptoKey,
-        ivBody: Uint8Array
+        bodyKey: CryptoKey | Uint8Array,
+        ivBody: Uint8Array,
+        cipherId: number = 0x01
     ): Promise<Uint8Array> {
+        if (cipherId === 0x02) {
+            if (!(bodyKey instanceof Uint8Array) || bodyKey.length !== 32) {
+                throw new Error("ChaCha20-Poly1305 çözümü için 32 baytlık ham anahtar gereklidir.");
+            }
+            return this.decryptChaCha(cipherBody, bodyKey, ivBody);
+        }
+
         const plainBuf = await crypto.subtle.decrypt(
             { name: 'AES-GCM', iv: ivBody as BufferSource },
-            bodyKey,
+            bodyKey as CryptoKey,
             cipherBody as BufferSource
         );
         return new Uint8Array(plainBuf);

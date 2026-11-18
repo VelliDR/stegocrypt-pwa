@@ -14,21 +14,33 @@ export interface CanvasProcessResult {
     maxCapacityBytes2LSB: number;
 }
 
+export interface LoadImageOptions {
+    preserveAlpha?: boolean;
+    maxDim?: number;
+}
+
 export const ImageEngine = {
     /**
      * Görsel dosyasını (PNG/JPEG/WEBP) SimpleImageData yapısına yükler.
      * PNG dosyaları için doğrudan deterministik PngCodec çalıştırılarak tarayıcı canvas renk dönüşümü ve parmak izi gürültüsü önlenir.
      */
-    async loadImageData(file: File | Blob): Promise<SimpleImageData> {
+    async loadImageData(file: File | Blob, options: LoadImageOptions = {}): Promise<SimpleImageData> {
+        const fileMeta = file as { name?: string; type?: string };
+        if (this.isHeicFile(fileMeta)) {
+            throw new Error("HEIC/HEIF formatı tarayıcılar tarafından doğrudan desteklenmiyor. Lütfen görseli PNG formatına dönüştürün.");
+        }
+
         try {
             const buf = await file.arrayBuffer();
             const u8 = new Uint8Array(buf);
             // PNG Dosya İmzası (Magic: 89 50 4E 47)
             if (u8.length >= 8 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) {
                 const decoded = await PngCodec.decode(u8);
-                // Alfa düzleştirme: Şeffaf piksellerin alfa kanalını 255'e sabitleyerek bozulmayı önle
-                for (let i = 3; i < decoded.data.length; i += 4) {
-                    decoded.data[i] = 255;
+                if (!options.preserveAlpha) {
+                    // Alfa düzleştirme: Şeffaf piksellerin alfa kanalını 255'e sabitleyerek bozulmayı önle
+                    for (let i = 3; i < decoded.data.length; i += 4) {
+                        decoded.data[i] = 255;
+                    }
                 }
                 return decoded;
             }
@@ -46,7 +58,8 @@ export const ImageEngine = {
             img.onload = () => {
                 URL.revokeObjectURL(url);
                 try {
-                    const res = ImageEngine.processToCanvas(img);
+                    const maxDim = options.maxDim ?? (options.preserveAlpha ? Number.POSITIVE_INFINITY : 2560);
+                    const res = ImageEngine.processToCanvas(img, maxDim, options.preserveAlpha ?? false);
                     resolve(res.imageData);
                 } catch (e) {
                     reject(e);
@@ -116,13 +129,13 @@ export const ImageEngine = {
     },
 
     /**
-     * Görseli canvas'a aktarır ve alfa piksellerini 255'e sabitleyerek düzleştirir.
+     * Görseli canvas'a aktarır ve varsayılan olarak alfa piksellerini 255'e sabitleyerek düzleştirir.
      */
-    processToCanvas(img: HTMLImageElement, maxDim: number = 2560): CanvasProcessResult {
+    processToCanvas(img: HTMLImageElement, maxDim: number = 2560, preserveAlpha: boolean = false): CanvasProcessResult {
         let width = img.width;
         let height = img.height;
 
-        if (width > maxDim || height > maxDim) {
+        if (Number.isFinite(maxDim) && (width > maxDim || height > maxDim)) {
             if (width > height) {
                 height = Math.round((height * maxDim) / width);
                 width = maxDim;
@@ -139,9 +152,11 @@ export const ImageEngine = {
         const ctx = canvas.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
         if (!ctx) throw new Error("Canvas context alınamadı.");
 
-        // 1. Opak arka plan doldur
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
+        if (!preserveAlpha) {
+            // 1. Opak arka plan doldur
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+        }
 
         // 2. Görseli çiz
         ctx.drawImage(img, 0, 0, width, height);
@@ -149,11 +164,13 @@ export const ImageEngine = {
         const imgData = ctx.getImageData(0, 0, width, height);
         const d = imgData.data;
 
-        // 3. Alfa kanallarını 255'e sabitle (Premultiplied alpha kaynaklı bozulmaları önler)
-        for (let i = 3; i < d.length; i += 4) {
-            d[i] = 255;
+        if (!preserveAlpha) {
+            // 3. Alfa kanallarını 255'e sabitle (Premultiplied alpha kaynaklı bozulmaları önler)
+            for (let i = 3; i < d.length; i += 4) {
+                d[i] = 255;
+            }
+            ctx.putImageData(imgData, 0, 0);
         }
-        ctx.putImageData(imgData, 0, 0);
 
         const totalChannels = Math.floor((d.length / 4) * 3);
         const maxCapacityBytes1LSB = Math.max(0, Math.floor(totalChannels / 8) - 36);

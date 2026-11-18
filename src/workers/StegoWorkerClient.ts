@@ -15,6 +15,14 @@ interface PendingRequest {
 let workerInstance: Worker | null = null;
 const pendingRequests = new Map<string, PendingRequest>();
 
+function rejectAllPending(reason: string): void {
+    for (const [, req] of pendingRequests.entries()) {
+        req.reject(new Error(reason));
+    }
+    pendingRequests.clear();
+    workerInstance = null;
+}
+
 function getWorker(): Worker | null {
     if (typeof window === 'undefined' || typeof Worker === 'undefined') {
         return null;
@@ -39,6 +47,11 @@ function getWorker(): Worker | null {
             };
             workerInstance.onerror = (err) => {
                 console.error("Worker hatası:", err);
+                rejectAllPending(err.message || "Web Worker beklenmeyen bir hatayla sonlandı.");
+            };
+            workerInstance.onmessageerror = () => {
+                console.error("Worker mesaj serileştirme hatası.");
+                rejectAllPending("Web Worker mesaj iletişimi başarısız oldu.");
             };
         } catch (e) {
             console.warn("Worker başlatılamadı, yerel fallback kullanılacak:", e);
@@ -75,67 +88,8 @@ export const StegoWorkerClient = {
         onProgress?: (percent: number, text: string) => void
     ): Promise<T> {
         if (action === 'ENCRYPT_V3') {
-            const { KeyDerivation } = await import('../crypto/KeyDerivation.ts');
-            const { CryptoEngine } = await import('../crypto/CryptoEngine.ts');
-            const { StegoEngine } = await import('../stego/StegoEngine.ts');
-            const { AdaptiveEngine } = await import('../stego/AdaptiveEngine.ts');
-            const { PngCodec } = await import('../codec/PngCodec.ts');
-
-            const { pixelBuffer, width, height, rawBuffer, pass, lsbMode, isDeniable, rawDecoy, passDecoy } = data;
-            const method = data.method || 'matching';
-            const distribution = data.distribution || 'adaptive';
-            const kdfType = data.kdfType || 'pbkdf2';
-            const kdfId = kdfType === 'argon2id' ? 0x02 : 0x01;
-            const imageData = { width, height, data: new Uint8ClampedArray(pixelBuffer) };
-            const sharedSalt = crypto.getRandomValues(new Uint8Array(16));
-
-            if (isDeniable && rawDecoy && passDecoy) {
-                const kdfName = kdfType === 'argon2id' ? 'Argon2id Wasm 64MB' : '600.000 PBKDF2';
-                if (onProgress) onProgress(20, `Tuzak katman anahtarı türetiliyor (${kdfName})...`);
-                const masterDecoy = kdfType === 'argon2id'
-                    ? await KeyDerivation.deriveMasterKeyArgon2id(passDecoy, sharedSalt)
-                    : await KeyDerivation.deriveMasterKeyV3(passDecoy, sharedSalt, 600000);
-                const subkeysDecoy = await KeyDerivation.deriveSubkeysV3(masterDecoy, 'v3/even');
-                const encDecoy = await CryptoEngine.encryptV3(new Uint8Array(rawDecoy), subkeysDecoy.metaKey as CryptoKey, subkeysDecoy.bodyKey as CryptoKey, lsbMode, kdfId);
-                if (distribution === 'adaptive') {
-                    AdaptiveEngine.embedAdaptive(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
-                } else {
-                    StegoEngine.embedV3(imageData, encDecoy.header48, encDecoy.cipherBody, lsbMode, subkeysDecoy.scatterBits, sharedSalt, 'even', method);
-                }
-
-                if (onProgress) onProgress(60, `Gerçek katman anahtarı türetiliyor (${kdfName})...`);
-                const masterReal = kdfType === 'argon2id'
-                    ? await KeyDerivation.deriveMasterKeyArgon2id(pass, sharedSalt)
-                    : await KeyDerivation.deriveMasterKeyV3(pass, sharedSalt, 600000);
-                const subkeysReal = await KeyDerivation.deriveSubkeysV3(masterReal, 'v3/odd');
-                const encReal = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeysReal.metaKey as CryptoKey, subkeysReal.bodyKey as CryptoKey, lsbMode, kdfId);
-                if (distribution === 'adaptive') {
-                    AdaptiveEngine.embedAdaptive(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
-                } else {
-                    StegoEngine.embedV3(imageData, encReal.header48, encReal.cipherBody, lsbMode, subkeysReal.scatterBits, null, 'odd', method);
-                }
-            } else {
-                const kdfName = kdfType === 'argon2id' ? 'Argon2id Wasm 64MB' : '600.000 PBKDF2';
-                if (onProgress) onProgress(30, `Master anahtar türetiliyor (${kdfName})...`);
-                const masterKey = kdfType === 'argon2id'
-                    ? await KeyDerivation.deriveMasterKeyArgon2id(pass, sharedSalt)
-                    : await KeyDerivation.deriveMasterKeyV3(pass, sharedSalt, 600000);
-                const subkeys = await KeyDerivation.deriveSubkeysV3(masterKey, 'v3/all');
-                const enc = await CryptoEngine.encryptV3(new Uint8Array(rawBuffer), subkeys.metaKey as CryptoKey, subkeys.bodyKey as CryptoKey, lsbMode, kdfId);
-                if (distribution === 'adaptive') {
-                    AdaptiveEngine.embedAdaptive(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
-                } else {
-                    StegoEngine.embedV3(imageData, enc.header48, enc.cipherBody, lsbMode, subkeys.scatterBits, sharedSalt, 'all', method);
-                }
-            }
-
-            const pngBytes = await PngCodec.encode({ width, height, data: imageData.data });
-            return {
-                pngBytes: pngBytes.buffer,
-                pixelBuffer: imageData.data.buffer,
-                width,
-                height
-            } as T;
+            const { runEncryptPipeline } = await import('./encryptPipeline.ts');
+            return await runEncryptPipeline(data, onProgress) as T;
         }
 
         if (action === 'DECRYPT_AUTO') {
@@ -180,6 +134,30 @@ export const StegoWorkerClient = {
             return { rsResult, pixelBuffer: imageData.data.buffer } as T;
         }
 
+        if (action === 'RENDER_BIT_PLANE') {
+            const { SteganalysisEngine } = await import('../forensics/SteganalysisEngine.ts');
+            const imageData = { width: data.width, height: data.height, data: new Uint8ClampedArray(data.pixelBuffer) };
+            const bitPlane = SteganalysisEngine.renderBitPlane(imageData, data.channel || 'all', data.bitDepth ?? 0);
+            return {
+                bitPlaneBuffer: bitPlane.data.buffer,
+                pixelBuffer: imageData.data.buffer,
+                width: data.width,
+                height: data.height
+            } as T;
+        }
+
+        if (action === 'RENDER_HEATMAP') {
+            const { SteganalysisEngine } = await import('../forensics/SteganalysisEngine.ts');
+            const imageData = { width: data.width, height: data.height, data: new Uint8ClampedArray(data.pixelBuffer) };
+            const heatmap = SteganalysisEngine.renderHeatmap(imageData, data.blockSize || 32);
+            return {
+                heatmapBuffer: heatmap.data.buffer,
+                pixelBuffer: imageData.data.buffer,
+                width: data.width,
+                height: data.height
+            } as T;
+        }
+
         if (action === 'INSPECT_BINARY') {
             const { BinaryInspector } = await import('../forensics/BinaryInspector.ts');
             const report = BinaryInspector.inspect(data.fileBuffer);
@@ -197,6 +175,20 @@ export const StegoWorkerClient = {
                 comparison,
                 ampDiffBuffer: ampDiff.data.buffer,
                 lsbDiffBuffer: lsbDiff.data.buffer,
+                pixelBuffer1: data.pixelBuffer1,
+                pixelBuffer2: data.pixelBuffer2,
+                width: data.width,
+                height: data.height
+            } as T;
+        }
+
+        if (action === 'RENDER_AMPLIFIED_DIFF') {
+            const { DiffEngine } = await import('../forensics/DiffEngine.ts');
+            const img1 = { width: data.width, height: data.height, data: new Uint8ClampedArray(data.pixelBuffer1) };
+            const img2 = { width: data.width, height: data.height, data: new Uint8ClampedArray(data.pixelBuffer2) };
+            const ampDiff = DiffEngine.renderAmplifiedDiff(img1, img2, data.amplifier || 20);
+            return {
+                ampDiffBuffer: ampDiff.data.buffer,
                 pixelBuffer1: data.pixelBuffer1,
                 pixelBuffer2: data.pixelBuffer2,
                 width: data.width,

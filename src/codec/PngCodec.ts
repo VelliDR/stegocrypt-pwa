@@ -24,12 +24,19 @@ export function crc32(buf: Uint8Array, prev: number = 0): number {
     return (c ^ (-1)) >>> 0;
 }
 
-async function deflateRaw(rawBytes: Uint8Array): Promise<Uint8Array> {
-    const cs = new CompressionStream('deflate');
-    const writer = cs.writable.getWriter();
-    writer.write(rawBytes as unknown as BufferSource);
-    writer.close();
-    const reader = cs.readable.getReader();
+async function runStreamTransform(stream: CompressionStream | DecompressionStream, inputBytes: Uint8Array): Promise<Uint8Array> {
+    const writer = stream.writable.getWriter();
+    const reader = stream.readable.getReader();
+
+    const writePromise = (async () => {
+        try {
+            await writer.write(inputBytes as unknown as BufferSource);
+            await writer.close();
+        } catch {
+            // Okuma akışından kaynaklanan hatalar reader tarafından yakalanacaktır
+        }
+    })();
+
     const chunks: Uint8Array[] = [];
     let totalLen = 0;
     while (true) {
@@ -40,6 +47,9 @@ async function deflateRaw(rawBytes: Uint8Array): Promise<Uint8Array> {
             totalLen += value.length;
         }
     }
+
+    await writePromise;
+
     const result = new Uint8Array(totalLen);
     let offset = 0;
     for (const chunk of chunks) {
@@ -49,29 +59,12 @@ async function deflateRaw(rawBytes: Uint8Array): Promise<Uint8Array> {
     return result;
 }
 
+async function deflateRaw(rawBytes: Uint8Array): Promise<Uint8Array> {
+    return runStreamTransform(new CompressionStream('deflate'), rawBytes);
+}
+
 async function inflateRaw(compressedBytes: Uint8Array): Promise<Uint8Array> {
-    const ds = new DecompressionStream('deflate');
-    const writer = ds.writable.getWriter();
-    writer.write(compressedBytes as unknown as BufferSource);
-    writer.close();
-    const reader = ds.readable.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalLen = 0;
-    while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-            chunks.push(value);
-            totalLen += value.length;
-        }
-    }
-    const result = new Uint8Array(totalLen);
-    let offset = 0;
-    for (const chunk of chunks) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return result;
+    return runStreamTransform(new DecompressionStream('deflate'), compressedBytes);
 }
 
 export const PngCodec = {
@@ -151,6 +144,10 @@ export const PngCodec = {
         let height = 0;
         let bitDepth = 0;
         let colorType = 0;
+        let compressionMethod = 0;
+        let filterMethod = 0;
+        let interlaceMethod = 0;
+        let hasIhdr = false;
         const idatChunks: Uint8Array[] = [];
 
         let offset = 8;
@@ -171,10 +168,17 @@ export const PngCodec = {
             }
 
             if (type === 'IHDR') {
+                if (length !== 13) {
+                    throw new Error(`Geçersiz IHDR chunk uzunluğu (${length}).`);
+                }
+                hasIhdr = true;
                 width = view.getUint32(dataStart, false);
                 height = view.getUint32(dataStart + 4, false);
                 bitDepth = u8[dataStart + 8]!;
                 colorType = u8[dataStart + 9]!;
+                compressionMethod = u8[dataStart + 10]!;
+                filterMethod = u8[dataStart + 11]!;
+                interlaceMethod = u8[dataStart + 12]!;
             } else if (type === 'IDAT') {
                 idatChunks.push(u8.subarray(dataStart, dataEnd));
             } else if (type === 'IEND') {
@@ -184,8 +188,24 @@ export const PngCodec = {
             offset = dataEnd + 4;
         }
 
+        if (!hasIhdr || width === 0 || height === 0) {
+            throw new Error("Geçersiz veya eksik PNG IHDR başlığı.");
+        }
+
+        if (width * height > 100_000_000) {
+            throw new Error(`PNG boyutları güvenli bellek sınırını aşıyor (${width}×${height}).`);
+        }
+
+        if (compressionMethod !== 0 || filterMethod !== 0 || interlaceMethod !== 0) {
+            throw new Error(`Desteklenmeyen PNG sıkıştırma/filtreleme/interlace yöntemi (interlace=${interlaceMethod}).`);
+        }
+
         if (bitDepth !== 8 || (colorType !== 6 && colorType !== 2 && colorType !== 0)) {
             throw new Error(`Yalnızca 8-bit RGBA (Type 6), RGB (Type 2) veya Grayscale (Type 0) PNG formatları desteklenir (Bulunan: ColorType ${colorType}, BitDepth ${bitDepth}).`);
+        }
+
+        if (idatChunks.length === 0) {
+            throw new Error("Bozuk PNG: IDAT görüntü verisi chunk'ı bulunamadı.");
         }
 
         let totalIdatLen = 0;

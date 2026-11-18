@@ -7,6 +7,13 @@
 
 import type { Partition, ScatterParams } from '../types/index.ts';
 
+export function modAffine(c0: number, stepIdx: number, step: number, n: number): number {
+    if (n <= 90_000_000) {
+        return (c0 + stepIdx * step) % n;
+    }
+    return Number((BigInt(c0) + BigInt(stepIdx) * BigInt(step)) % BigInt(n));
+}
+
 function gcd(a: number, b: number): number {
     while (b !== 0) {
         const t = b;
@@ -31,15 +38,19 @@ export const ScatterEngine = {
         if (n <= 0) throw new Error("Yetersiz kanal sayısı.");
 
         const pwBytes = new TextEncoder().encode(password);
-        const salt = new TextEncoder().encode(`scatter-v2-${partition}`);
-        const keyMaterial = await crypto.subtle.importKey('raw', pwBytes, 'PBKDF2', false, ['deriveBits']);
-        const bits = await crypto.subtle.deriveBits(
-            { name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' },
-            keyMaterial,
-            256
-        );
+        try {
+            const salt = new TextEncoder().encode(`scatter-v2-${partition}`);
+            const keyMaterial = await crypto.subtle.importKey('raw', pwBytes, 'PBKDF2', false, ['deriveBits']);
+            const bits = await crypto.subtle.deriveBits(
+                { name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' },
+                keyMaterial,
+                256
+            );
 
-        return this.deriveParamsFromBits(bits, totalChannels, partition);
+            return this.deriveParamsFromBits(bits, totalChannels, partition);
+        } finally {
+            pwBytes.fill(0);
+        }
     },
 
     /**
@@ -78,7 +89,7 @@ export const ScatterEngine = {
         if (partition === 'even') n = Math.floor((totalChannels + 1) / 2);
         else if (partition === 'odd') n = Math.floor(totalChannels / 2);
 
-        const pIdx = (c0 + stepIdx * step) % n;
+        const pIdx = modAffine(c0, stepIdx, step, n);
         let channelIdx = pIdx;
         if (partition === 'even') channelIdx = pIdx * 2;
         else if (partition === 'odd') channelIdx = pIdx * 2 + 1;
@@ -96,7 +107,7 @@ export const ScatterEngine = {
         if (partition === 'even') n = Math.floor((totalChannels + 1) / 2);
         else if (partition === 'odd') n = Math.floor(totalChannels / 2);
 
-        const pIdx = (c0 + stepIdx * step) % n;
+        const pIdx = modAffine(c0, stepIdx, step, n);
         let channelIdx = pIdx;
         if (partition === 'even') channelIdx = pIdx * 2;
         else if (partition === 'odd') channelIdx = pIdx * 2 + 1;

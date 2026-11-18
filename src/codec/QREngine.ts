@@ -45,6 +45,13 @@ qrcode.stringToBytes = (s: string): number[] => {
     return Array.from(new TextEncoder().encode(s));
 };
 
+export const MAX_QR_BYTES_BY_LEVEL: Record<QRErrorCorrectionLevel, number> = {
+    L: 2953,
+    M: 2331,
+    Q: 1663,
+    H: 1273
+};
+
 export const QREngine = {
     /**
      * QR kod maksimum güvenli bayt sınırı (~2300 bayt @ Level M).
@@ -60,8 +67,9 @@ export const QREngine = {
         }
 
         const byteLen = new TextEncoder().encode(text).length;
-        if (byteLen > this.MAX_QR_BYTES) {
-            throw new Error(`Veri çok büyük (${byteLen} bayt). QR kod standardı maksimum ~${this.MAX_QR_BYTES} bayt destekler. Lütfen görsel steganografi modunu kullanın.`);
+        const levelLimit = MAX_QR_BYTES_BY_LEVEL[level] ?? this.MAX_QR_BYTES;
+        if (byteLen > levelLimit) {
+            throw new Error(`Veri çok büyük (${byteLen} bayt). QR kod Level ${level} standardı maksimum ${levelLimit} bayt destekler. Lütfen daha kısa metin veya görsel steganografi modunu kullanın.`);
         }
 
         // typeNumber = 0: Otomatik versiyon tespiti (Version 1-40)
@@ -153,7 +161,7 @@ export const QREngine = {
                 if (typeof ImageData !== 'undefined') {
                     const nativeImgData = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
                     const barcodes = await detector.detect(nativeImgData);
-                    if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                    if (barcodes && barcodes.length > 0 && barcodes[0].rawValue && !barcodes[0].rawValue.includes('\uFFFD')) {
                         return barcodes[0].rawValue;
                     }
                 }

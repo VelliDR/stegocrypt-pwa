@@ -61,35 +61,39 @@ export const DiffEngine = {
         const c1 = (0.01 * 255) ** 2;
         const c2 = (0.03 * 255) ** 2;
 
+        const effW = width < windowSize ? width : windowSize;
+        const effH = height < windowSize ? height : windowSize;
+        if (effW * effH < 2) return 1.0;
+
         let totalSsim = 0;
         let numWindows = 0;
 
-        for (let y = 0; y <= height - windowSize; y += windowSize) {
-            for (let x = 0; x <= width - windowSize; x += windowSize) {
+        for (let y = 0; y <= height - effH; y += effH) {
+            for (let x = 0; x <= width - effW; x += effW) {
                 let mean1 = 0, mean2 = 0;
-                const n = windowSize * windowSize * 3;
+                const n = effW * effH;
 
-                for (let wy = 0; wy < windowSize; wy++) {
-                    for (let wx = 0; wx < windowSize; wx++) {
+                for (let wy = 0; wy < effH; wy++) {
+                    for (let wx = 0; wx < effW; wx++) {
                         const idx = ((y + wy) * width + (x + wx)) * 4;
-                        mean1 += d1[idx]! + d1[idx + 1]! + d1[idx + 2]!;
-                        mean2 += d2[idx]! + d2[idx + 1]! + d2[idx + 2]!;
+                        const y1 = 0.299 * d1[idx]! + 0.587 * d1[idx + 1]! + 0.114 * d1[idx + 2]!;
+                        const y2 = 0.299 * d2[idx]! + 0.587 * d2[idx + 1]! + 0.114 * d2[idx + 2]!;
+                        mean1 += y1;
+                        mean2 += y2;
                     }
                 }
                 mean1 /= n;
                 mean2 /= n;
 
                 let var1 = 0, var2 = 0, covar = 0;
-                for (let wy = 0; wy < windowSize; wy++) {
-                    for (let wx = 0; wx < windowSize; wx++) {
+                for (let wy = 0; wy < effH; wy++) {
+                    for (let wx = 0; wx < effW; wx++) {
                         const idx = ((y + wy) * width + (x + wx)) * 4;
-                        for (let c = 0; c < 3; c++) {
-                            const v1 = d1[idx + c]! - mean1;
-                            const v2 = d2[idx + c]! - mean2;
-                            var1 += v1 * v1;
-                            var2 += v2 * v2;
-                            covar += v1 * v2;
-                        }
+                        const v1 = (0.299 * d1[idx]! + 0.587 * d1[idx + 1]! + 0.114 * d1[idx + 2]!) - mean1;
+                        const v2 = (0.299 * d2[idx]! + 0.587 * d2[idx + 1]! + 0.114 * d2[idx + 2]!) - mean2;
+                        var1 += v1 * v1;
+                        var2 += v2 * v2;
+                        covar += v1 * v2;
                     }
                 }
                 var1 /= (n - 1);

@@ -26,10 +26,10 @@ const MAGIC_SIGNATURES = [
     { name: 'ELF Çalıştırılabilir', bytes: [0x7F, 0x45, 0x4C, 0x46] },
     { name: 'PDF Belgesi', bytes: [0x25, 0x50, 0x44, 0x46] },
     { name: 'StegoCrypt Format v1', bytes: [0x53, 0x54, 0x47, 0x31] },
-    { name: 'StegoCrypt Format v2', bytes: [0x53, 0x54, 0x47, 0x32] }
+    { name: 'StegoCrypt Format v1 (2-LSB)', bytes: [0x53, 0x54, 0x47, 0x32] }
 ];
 
-const FLAG_REGEX = /(flag\{[^}]+\}|ctf\{[^}]+\}|stego\{[^}]+\}|key\{[^}]+\})/i;
+const FLAG_REGEX = /(flag\{[^}]+\}|ctf\{[^}]+\}|cyber\{[^}]+\}|stego\{[^}]+\}|key\{[^}]+\}|secret\{[^}]+\})/i;
 
 export const ZstegScanner = {
     getCombinations(): ZstegCombination[] {
@@ -153,7 +153,7 @@ export const ZstegScanner = {
 
         // 2. Açık Metin ve Regex Taraması
         let text = '';
-        for (let i = 0; i < Math.min(sample.length, 512); i++) {
+        for (let i = 0; i < sample.length; i++) {
             const b = sample[i]!;
             text += (b >= 32 && b <= 126) ? String.fromCharCode(b) : '·';
         }
@@ -168,12 +168,13 @@ export const ZstegScanner = {
         }
 
         // 3. Yazdırılabilir ASCII Yoğunluk Oranı
+        const ratioLimit = Math.min(sample.length, 512);
         let printable = 0;
-        for (let i = 0; i < Math.min(sample.length, 256); i++) {
+        for (let i = 0; i < ratioLimit; i++) {
             const b = sample[i]!;
             if ((b >= 32 && b <= 126) || b === 10 || b === 13 || b === 9) printable++;
         }
-        const printableRatio = printable / Math.min(sample.length, 256);
+        const printableRatio = printable / ratioLimit;
 
         if (printableRatio > 0.85) {
             const cleanText = text.replace(/·+/g, ' ').trim().slice(0, 80);

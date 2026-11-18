@@ -87,6 +87,7 @@ export const BinaryInspector = {
         let offset = 8;
         let chunkIndex = 0;
         let iendEndOffset = -1;
+        let hasTruncatedChunk = false;
 
         while (offset + 8 <= u8.length) {
             const length = view.getUint32(offset, false);
@@ -95,6 +96,7 @@ export const BinaryInspector = {
             const dataEnd = dataStart + length;
 
             if (dataEnd + 4 > u8.length) {
+                hasTruncatedChunk = true;
                 break;
             }
 
@@ -167,6 +169,10 @@ export const BinaryInspector = {
             verdict = "⚠️ Bozuk veya Tahrif Edilmiş Chunk (CRC Uyuşmazlığı)";
             verdictLevel = 'alert';
             verdictDetails = "Bir veya daha fazla PNG chunk'ında CRC-32 sağlama toplamı tutarsız. Dosya tahrif edilmiş olabilir.";
+        } else if (hasTruncatedChunk || iendEndOffset === -1) {
+            verdict = "⚠️ Eksik veya Kesilmiş PNG Yapısı (IEND Bulunamadı)";
+            verdictLevel = 'alert';
+            verdictDetails = "PNG dosyası sonlandırıcı IEND chunk'ına ulaşmadan kesilmiş veya bozuk chunk uzunluğu içeriyor.";
         }
 
         return {
@@ -215,6 +221,7 @@ export const BinaryInspector = {
 
             if (offset + 2 > u8.length) break;
             const markerLen = (u8[offset]! << 8) | u8[offset + 1]!;
+            if (markerLen < 2) break;
 
             if (markerCode === 0xDA) { // SOS
                 offset += markerLen;

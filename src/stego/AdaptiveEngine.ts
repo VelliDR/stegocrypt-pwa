@@ -56,6 +56,8 @@ export const AdaptiveEngine = {
             for (let x = 1; x < width - 1; x++) {
                 if ((x + y) % 2 === 1) {
                     const idx = rowOffset + x;
+                    // İlk 43 piksel (0..42) 128-kanal public salt alanına ayrılmıştır
+                    if (idx < 43) continue;
                     list.push({ idx, score: scores[idx] ?? 0 });
                 }
             }
@@ -121,7 +123,7 @@ export const AdaptiveEngine = {
         let level: 'low' | 'medium' | 'high' = 'low';
         let label = 'Düşük Risk';
         let badgeColor = 'var(--md-primary)';
-        let message = 'Gizli veri tamamen yüksek varyanslı doku ve kenar bölgelerine sığıyor. İstatiksel tespit riski minimum seviyede.';
+        let message = 'Gizli veri tamamen yüksek varyanslı doku ve kenar bölgelerine sığıyor. İstatistiksel tespit riski minimum seviyede.';
 
         if (usagePercent > 60) {
             level = 'high';
@@ -293,7 +295,7 @@ export const AdaptiveEngine = {
         }
 
         // 2. Başlığı doğrula
-        const { lsbMode, cipherLen, ivBody } = await CryptoEngine.decryptMetaV3(header48, metaKey as CryptoKey);
+        const { lsbMode, cipherLen, ivBody, cipherId } = await CryptoEngine.decryptMetaV3(header48, metaKey as CryptoKey);
 
         const channelsPerByte = lsbMode === 2 ? 4 : 8;
         const neededBodyChannels = cipherLen * channelsPerByte;
@@ -326,6 +328,14 @@ export const AdaptiveEngine = {
         }
 
         // 4. Gövdeyi çöz
-        return await CryptoEngine.decryptBodyV3(cipherBody, bodyKey as CryptoKey, ivBody);
+        if (cipherId === 0x02) {
+            const chachaKey = await KeyDerivation.deriveChaChaBodyKeyV3(masterKey, label);
+            try {
+                return await CryptoEngine.decryptBodyV3(cipherBody, chachaKey, ivBody, 0x02);
+            } finally {
+                chachaKey.fill(0);
+            }
+        }
+        return await CryptoEngine.decryptBodyV3(cipherBody, bodyKey as CryptoKey, ivBody, cipherId);
     }
 };

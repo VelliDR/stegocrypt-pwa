@@ -58,6 +58,17 @@ export const SteganalysisEngine = {
             }
         }
 
+        if (k < 2) {
+            return {
+                chiSquare: Math.round(chiSquare * 100) / 100,
+                pValue: 1,
+                probability: 0,
+                isStego: false,
+                degreesOfFreedom: 1,
+                verdict: "Temiz / İstatistiksel Karşılaştırma İçin Yetersiz Renk Çifti"
+            };
+        }
+
         const dof = Math.max(1, k - 1);
         const safeChiSquare = Math.max(0, chiSquare);
         const z = (Math.pow(safeChiSquare / dof, 1 / 3) - (1 - 2 / (9 * dof))) / Math.sqrt(2 / (9 * dof));
@@ -91,68 +102,62 @@ export const SteganalysisEngine = {
      */
     analyzeRS(imageData: SimpleImageData, channel: 'r' | 'g' | 'b' | 'all' = 'all'): RSAnalysisResult {
         const { width, height, data } = imageData;
-        const totalPixels = width * height;
 
         function F1(x: number): number { return x ^ 1; }
         function Fm1(x: number): number { return (x & 1) ? x + 1 : x - 1; }
 
         function calculateChannel(channelOffset: number, stride: number = 4) {
-            const numGroups = Math.floor(totalPixels / 4);
+            const groupsPerRow = Math.floor(width / 4);
+            const numGroups = groupsPerRow * height;
             if (numGroups < 16) {
                 return { p: 0, rM: 0, sM: 0, r_M: 0, s_M: 0, d0: 0, dm0: 0, d1: 0, dm1: 0 };
             }
 
-            let R = 0, S = 0;
-            let Rm = 0, Sm = 0;
+            let R = 0, S = 0, Rm = 0, Sm = 0;
+            let R1 = 0, S1 = 0, Rm1 = 0, Sm1 = 0;
 
-            for (let g = 0; g < numGroups; g++) {
-                const base = (g * 4) * stride + channelOffset;
-                const x0 = data[base]!;
-                const x1 = data[base + stride]!;
-                const x2 = data[base + stride * 2]!;
-                const x3 = data[base + stride * 3]!;
+            for (let y = 0; y < height; y++) {
+                const rowBase = y * width * stride + channelOffset;
+                for (let gx = 0; gx < groupsPerRow; gx++) {
+                    const base = rowBase + gx * 4 * stride;
+                    const x0 = data[base]!;
+                    const x1 = data[base + stride]!;
+                    const x2 = data[base + stride * 2]!;
+                    const x3 = data[base + stride * 3]!;
 
-                const v = Math.abs(x0 - x1) + Math.abs(x1 - x2) + Math.abs(x2 - x3);
+                    // Orijinal grup
+                    const v = Math.abs(x0 - x1) + Math.abs(x1 - x2) + Math.abs(x2 - x3);
+                    const fx1 = F1(x1);
+                    const fx2 = F1(x2);
+                    const vM = Math.abs(x0 - fx1) + Math.abs(fx1 - fx2) + Math.abs(fx2 - x3);
+                    if (vM > v) R++;
+                    else if (vM < v) S++;
 
-                // Mask M: [0, 1, 1, 0]
-                const fx1 = F1(x1);
-                const fx2 = F1(x2);
-                const vM = Math.abs(x0 - fx1) + Math.abs(fx1 - fx2) + Math.abs(fx2 - x3);
-                if (vM > v) R++;
-                else if (vM < v) S++;
+                    const fmx1 = Fm1(x1);
+                    const fmx2 = Fm1(x2);
+                    const v_M = Math.abs(x0 - fmx1) + Math.abs(fmx1 - fmx2) + Math.abs(fmx2 - x3);
+                    if (v_M > v) Rm++;
+                    else if (v_M < v) Sm++;
 
-                // Mask -M: [0, -1, -1, 0]
-                const fmx1 = Fm1(x1);
-                const fmx2 = Fm1(x2);
-                const v_M = Math.abs(x0 - fmx1) + Math.abs(fmx1 - fmx2) + Math.abs(fmx2 - x3);
-                if (v_M > v) Rm++;
-                else if (v_M < v) Sm++;
-            }
+                    // Ters çevrilmiş grup (F1 tüm piksellere uygulanır)
+                    const ix0 = F1(x0);
+                    const ix1 = fx1;
+                    const ix2 = fx2;
+                    const ix3 = F1(x3);
+                    const iv = Math.abs(ix0 - ix1) + Math.abs(ix1 - ix2) + Math.abs(ix2 - ix3);
 
-            // Inverted image (F1 applied to all pixels)
-            let R1 = 0, S1 = 0;
-            let Rm1 = 0, Sm1 = 0;
+                    const ifx1 = F1(ix1);
+                    const ifx2 = F1(ix2);
+                    const ivM = Math.abs(ix0 - ifx1) + Math.abs(ifx1 - ifx2) + Math.abs(ifx2 - ix3);
+                    if (ivM > iv) R1++;
+                    else if (ivM < iv) S1++;
 
-            for (let g = 0; g < numGroups; g++) {
-                const base = (g * 4) * stride + channelOffset;
-                const x0 = F1(data[base]!);
-                const x1 = F1(data[base + stride]!);
-                const x2 = F1(data[base + stride * 2]!);
-                const x3 = F1(data[base + stride * 3]!);
-
-                const v = Math.abs(x0 - x1) + Math.abs(x1 - x2) + Math.abs(x2 - x3);
-
-                const fx1 = F1(x1);
-                const fx2 = F1(x2);
-                const vM = Math.abs(x0 - fx1) + Math.abs(fx1 - fx2) + Math.abs(fx2 - x3);
-                if (vM > v) R1++;
-                else if (vM < v) S1++;
-
-                const fmx1 = Fm1(x1);
-                const fmx2 = Fm1(x2);
-                const v_M = Math.abs(x0 - fmx1) + Math.abs(fmx1 - fmx2) + Math.abs(fmx2 - x3);
-                if (v_M > v) Rm1++;
-                else if (v_M < v) Sm1++;
+                    const ifmx1 = Fm1(ix1);
+                    const ifmx2 = Fm1(ix2);
+                    const iv_M = Math.abs(ix0 - ifmx1) + Math.abs(ifmx1 - ifmx2) + Math.abs(ifmx2 - ix3);
+                    if (iv_M > iv) Rm1++;
+                    else if (iv_M < iv) Sm1++;
+                }
             }
 
             const r = R / numGroups;
@@ -270,17 +275,19 @@ export const SteganalysisEngine = {
         const mask = 1 << bitDepth;
 
         for (let i = 0; i < data.length; i += 4) {
+            if (channel === 'all') {
+                out[i] = (data[i]! & mask) ? 255 : 0;
+                out[i + 1] = (data[i + 1]! & mask) ? 255 : 0;
+                out[i + 2] = (data[i + 2]! & mask) ? 255 : 0;
+                out[i + 3] = 255;
+                continue;
+            }
+
             let val = 0;
             if (channel === 'r') val = (data[i]! & mask) ? 255 : 0;
             else if (channel === 'g') val = (data[i + 1]! & mask) ? 255 : 0;
             else if (channel === 'b') val = (data[i + 2]! & mask) ? 255 : 0;
             else if (channel === 'a') val = (data[i + 3]! & mask) ? 255 : 0;
-            else {
-                const rBit = (data[i]! & mask) ? 1 : 0;
-                const gBit = (data[i + 1]! & mask) ? 1 : 0;
-                const bBit = (data[i + 2]! & mask) ? 1 : 0;
-                val = (rBit || gBit || bBit) ? 255 : 0;
-            }
 
             out[i] = val;
             out[i + 1] = val;
@@ -323,9 +330,14 @@ export const SteganalysisEngine = {
                     }
                 }
 
-                const dof = Math.max(1, k - 1);
-                const z = (chi - dof) / Math.sqrt(2 * dof);
-                const prob = 1 / (1 + Math.exp(-z));
+                let prob = 0;
+                if (k >= 2) {
+                    const dof = Math.max(1, k - 1);
+                    const safeChi = Math.max(0, chi);
+                    const z = (Math.pow(safeChi / dof, 1 / 3) - (1 - 2 / (9 * dof))) / Math.sqrt(2 / (9 * dof));
+                    // Düşük χ² (negatif z) -> çift/tek piksel eşitlenmesi -> yüksek stego olasılığı
+                    prob = 1 / (1 + Math.exp((z - 2.5) * 1.5));
+                }
 
                 const r = Math.round(prob * 255);
                 const g = Math.round((1 - prob) * 200);

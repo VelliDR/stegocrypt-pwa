@@ -22,8 +22,11 @@ export const VariationSelectorEngine = {
      * @param carrier Taşıyıcı emoji veya metin (varsayılan: 🛡️)
      */
     encode(payload: Uint8Array, carrier: string = '🛡️'): string {
-        let vsSequence = VS_MAGIC_START;
         const len = payload.length;
+        if (len > 65535) {
+            throw new Error(`Veri boyutu Variation Selector 16-bit üst sınırını aşıyor (${len} > 65535 bayt).`);
+        }
+        let vsSequence = VS_MAGIC_START;
 
         // 16-bit Big-Endian uzunluk başlığı (4 nibble)
         const lenNibbles = [
